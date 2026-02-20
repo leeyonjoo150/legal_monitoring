@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ article.title }} - Legal Radar</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo"><a href="{% url 'articles:dashboard' %}">Legal Radar</a></h1>
+            <p class="subtitle">소송금융 투자 검토 모니터링</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <a href="{% url 'articles:dashboard' %}" class="back-link">&larr; 목록으로</a>
+
+        <article class="detail-card">
+            <div class="detail-header">
+                <span class="badge badge-{{ article.suitability|lower }} badge-lg">
+                    {{ article.suitability }}
+                </span>
+                <h2 class="detail-title">{{ article.title }}</h2>
+                <div class="detail-meta">
+                    <span>{{ article.press }}</span>
+                    <span>{{ article.published_at|date:"Y년 m월 d일 H:i" }}</span>
+                    <span>수집: {{ article.collected_at|date:"Y-m-d H:i" }}</span>
+                </div>
+            </div>
+
+            <div class="detail-body">
+                <div class="detail-section">
+                    <h3>AI 요약</h3>
+                    <p>{{ article.summary }}</p>
+                </div>
+
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="detail-label">적합도 판단 근거</div>
+                        <div class="detail-value">{{ article.suitability_reason }}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">사건 분야</div>
+                        <div class="detail-value">{{ article.case_category }}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">상대방</div>
+                        <div class="detail-value">{{ article.defendant }}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">피해 규모</div>
+                        <div class="detail-value">{{ article.damage_scale }}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">진행 단계</div>
+                        <div class="detail-value">{{ article.stage }}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">진행 단계 상세</div>
+                        <div class="detail-value">{{ article.stage_detail }}</div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>네이버 요약문</h3>
+                    <p class="description-text">{{ article.description }}</p>
+                </div>
+
+                <div class="detail-actions">
+                    <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+                        원문 보기
+                    </a>
+                    <a href="{% url 'articles:dashboard' %}" class="btn btn-secondary">목록으로</a>
+                </div>
+            </div>
+        </article>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>Legal Radar &copy; 로앤굿</p>
+        </div>
+    </footer>
+</body>
+</html>

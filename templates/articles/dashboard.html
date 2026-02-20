@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal Radar - 소송금융 모니터링</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">Legal Radar</h1>
+            <p class="subtitle">소송금융 투자 검토 모니터링</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- 상단 요약 카드 -->
+        <section class="summary-cards">
+            <div class="card card-total">
+                <div class="card-label">오늘 수집</div>
+                <div class="card-value">{{ total_today }}건</div>
+            </div>
+            <div class="card card-high">
+                <div class="card-label">High</div>
+                <div class="card-value">{{ high_today }}건</div>
+            </div>
+            <div class="card card-medium">
+                <div class="card-label">Medium</div>
+                <div class="card-value">{{ medium_today }}건</div>
+            </div>
+        </section>
+
+        <!-- 필터 -->
+        <section class="filters">
+            <form method="get" action="{% url 'articles:dashboard' %}">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label for="suitability">적합도</label>
+                        <select name="suitability" id="suitability">
+                            <option value="">전체</option>
+                            <option value="High" {% if current_filters.suitability == 'High' %}selected{% endif %}>High</option>
+                            <option value="Medium" {% if current_filters.suitability == 'Medium' %}selected{% endif %}>Medium</option>
+                            <option value="Low" {% if current_filters.suitability == 'Low' %}selected{% endif %}>Low</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="case_category">사건 분야</label>
+                        <select name="case_category" id="case_category">
+                            <option value="">전체</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat }}" {% if current_filters.case_category == cat %}selected{% endif %}>{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="stage">진행 단계</label>
+                        <select name="stage" id="stage">
+                            <option value="">전체</option>
+                            <option value="피해 발생" {% if current_filters.stage == '피해 발생' %}selected{% endif %}>피해 발생</option>
+                            <option value="관련 절차 진행" {% if current_filters.stage == '관련 절차 진행' %}selected{% endif %}>관련 절차 진행</option>
+                            <option value="소송중" {% if current_filters.stage == '소송중' %}selected{% endif %}>소송중</option>
+                            <option value="판결 선고" {% if current_filters.stage == '판결 선고' %}selected{% endif %}>판결 선고</option>
+                            <option value="종결" {% if current_filters.stage == '종결' %}selected{% endif %}>종결</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="date_from">시작일</label>
+                        <input type="date" name="date_from" id="date_from" value="{{ current_filters.date_from }}">
+                    </div>
+                    <div class="filter-group">
+                        <label for="date_to">종료일</label>
+                        <input type="date" name="date_to" id="date_to" value="{{ current_filters.date_to }}">
+                    </div>
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-primary">검색</button>
+                        <a href="{% url 'articles:dashboard' %}" class="btn btn-secondary">초기화</a>
+                        <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀 내보내기</a>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- 기사 목록 -->
+        <section class="article-list">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-suitability">적합도</th>
+                        <th class="col-title">제목</th>
+                        <th class="col-category">사건 분야</th>
+                        <th class="col-defendant">상대방</th>
+                        <th class="col-stage">진행 단계</th>
+                        <th class="col-press">언론사</th>
+                        <th class="col-date">게재일</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for article in articles %}
+                    <tr>
+                        <td>
+                            <span class="badge badge-{{ article.suitability|lower }}">
+                                {{ article.suitability }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'articles:detail' article.id %}" class="article-link">
+                                {{ article.title }}
+                            </a>
+                        </td>
+                        <td>{{ article.case_category }}</td>
+                        <td>{{ article.defendant }}</td>
+                        <td>{{ article.stage }}</td>
+                        <td>{{ article.press }}</td>
+                        <td>{{ article.published_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="empty-message">수집된 기사가 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <!-- 페이징 -->
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="page-link">&laquo; 이전</a>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                <span class="page-link page-current">{{ num }}</span>
+                {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+                <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ num }}" class="page-link">{{ num }}</a>
+                {% elif num == 1 or num == page_obj.paginator.num_pages %}
+                <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ num }}" class="page-link">{{ num }}</a>
+                {% elif num == 2 or num == page_obj.paginator.num_pages|add:"-1" %}
+                <span class="page-dots">...</span>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="page-link">다음 &raquo;</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>Legal Radar &copy; 로앤굿</p>
+        </div>
+    </footer>
+</body>
+</html>

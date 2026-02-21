@@ -29,3 +29,11 @@ class Article(models.Model):
 
     def __str__(self):
         return f'[{self.suitability}] {self.title}'
+
+
+class SkippedURL(models.Model):
+    url = models.URLField(unique=True)
+    skipped_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.url

@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+.claude
+__pycache__
+*.pyc
+*.pyo
+db.sqlite3
+db.sqlite3-journal

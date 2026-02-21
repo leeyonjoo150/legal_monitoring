@@ -174,13 +174,13 @@ def _extract_press(link: str) -> str:
         return '알 수 없음'
 
 
-def collect_all_news() -> list[dict]:
+def collect_all_news(display: int = 20) -> list[dict]:
     """모든 키워드로 기사를 수집하고 URL 기준 중복 제거 후 반환."""
     all_articles: dict[str, dict] = {}
 
     for keyword in KEYWORDS:
         try:
-            articles = fetch_news_for_keyword(keyword)
+            articles = fetch_news_for_keyword(keyword, display=display)
             for article in articles:
                 url = article['url']
                 if url not in all_articles:

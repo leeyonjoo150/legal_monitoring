@@ -1,13 +1,14 @@
 from datetime import datetime
 
 from django.core.paginator import Paginator
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
 from articles.models import Article
+from articles.progress import get_progress
 
 ARTICLES_PER_PAGE = 30
 
@@ -128,3 +129,8 @@ def export_xlsx(request):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
+
+
+def progress_status(request):
+    """분석 진행상황 JSON API."""
+    return JsonResponse(get_progress())

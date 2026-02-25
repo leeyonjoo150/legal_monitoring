@@ -143,7 +143,7 @@ def analyze_article(article: dict, existing_articles: list[dict]) -> dict | None
         print(f"[경고] 일일 호출 수 {_daily_call_count}회 - 한도 임박")
 
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(model_name='gemini-2.5-flash')
+    model = genai.GenerativeModel(model_name='gemini-2.5-flash-lite')
 
     prompt = _build_prompt(article, existing_articles)
     response = model.generate_content(

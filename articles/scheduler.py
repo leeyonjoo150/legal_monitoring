@@ -1,10 +1,45 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.utils import timezone
 
 from articles.collectors.naver import collect_all_news
 from articles.analyzers.gemini import analyze_with_retry
-from articles.models import Article
+from articles.models import Article, SkippedURL
+
+# 경과 시간별 키워드당 수집 건수
+DISPLAY_TIERS = [
+    (2,   30),   # ~ 2시간: 정상 운영 (근무 중)
+    (24,  50),   # ~ 1일: 퇴근 → 다음날 출근
+    (96,  80),   # ~ 4일: 금요일 퇴근 → 월요일 출근
+    (None, 100), # 4일 초과: 골든위크 등 장기 휴일 (API 최대)
+]
+
+
+def _get_display_count() -> int:
+    """마지막 수집 이후 경과 시간에 따라 키워드당 수집 건수를 결정."""
+    last_article = (
+        Article.objects.order_by('-collected_at')
+        .values_list('collected_at', flat=True).first()
+    )
+    last_skipped = (
+        SkippedURL.objects.order_by('-skipped_at')
+        .values_list('skipped_at', flat=True).first()
+    )
+
+    candidates = [t for t in [last_article, last_skipped] if t is not None]
+
+    if not candidates:
+        # DB에 데이터 없음 = 첫 수집 → 최대치
+        return 100
+
+    last_collected = max(candidates)
+    elapsed_hours = (datetime.now() - last_collected).total_seconds() / 3600
+
+    for max_hours, display in DISPLAY_TIERS:
+        if max_hours is None or elapsed_hours <= max_hours:
+            return display
+
+    return 100
 
 
 def collect_and_analyze():
@@ -13,15 +48,21 @@ def collect_and_analyze():
     print(f"[스케줄러] 수집 시작: {timezone.now()}")
     print(f"{'='*50}")
 
-    # 1. 네이버 뉴스 수집
-    raw_articles = collect_all_news()
+    # 1. 경과 시간에 따라 수집량 결정 + 네이버 뉴스 수집
+    display_count = _get_display_count()
+    print(f"[수집량] 키워드당 {display_count}건 (경과 시간 기반 자동 설정)")
+    raw_articles = collect_all_news(display=display_count)
 
-    # 2. URL 기준 DB 중복 제거
+    # 2. URL 기준 DB 중복 제거 (Article + SkippedURL 통합 체크)
     existing_urls = set(
         Article.objects.values_list('url', flat=True)
     )
-    new_articles = [a for a in raw_articles if a['url'] not in existing_urls]
-    print(f"[필터] 신규 기사: {len(new_articles)}건 (기존 DB 제외)")
+    skipped_urls = set(
+        SkippedURL.objects.values_list('url', flat=True)
+    )
+    all_known_urls = existing_urls | skipped_urls
+    new_articles = [a for a in raw_articles if a['url'] not in all_known_urls]
+    print(f"[필터] 신규 기사: {len(new_articles)}건 (Article {len(existing_urls)}건 + SkippedURL {len(skipped_urls)}건 제외)")
 
     if not new_articles:
         print("[완료] 신규 기사 없음")
@@ -45,6 +86,7 @@ def collect_and_analyze():
             continue
 
         if result.get('is_duplicate', False):
+            SkippedURL.objects.get_or_create(url=article['url'])
             skipped_duplicate += 1
             print(f"[중복 사건] 건너뜀: {article['title'][:50]}")
             continue

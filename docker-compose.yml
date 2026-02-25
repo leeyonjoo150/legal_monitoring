@@ -1,11 +1,15 @@
 services:
   web:
     build: .
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - DB_PATH=/app/data/db.sqlite3
     volumes:
-      - ./db.sqlite3:/app/db.sqlite3
-      - ./static:/app/static
-    restart: unless-stopped
+      - sqlite-data:/app/data
+
+volumes:
+  sqlite-data:

@@ -108,6 +108,13 @@ def collect_and_analyze():
                 print(f"[중복 사건] 건너뜀: {article['title'][:50]}")
                 continue
 
+            if result.get('is_fictional', False):
+                SkippedURL.objects.get_or_create(url=article['url'])
+                skipped_duplicate += 1
+                update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
+                print(f"[가상 컨텐츠] 건너뜀: {article['title'][:50]}")
+                continue
+
             Article.objects.create(
                 title=article['title'],
                 url=article['url'],

@@ -122,6 +122,7 @@ def collect_and_analyze():
                 stage=result['stage'],
                 stage_detail=result['stage_detail'],
                 summary=result['summary'],
+                region=result['region'],
             )
             saved_count += 1
             update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)

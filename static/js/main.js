@@ -3,7 +3,7 @@
 (function () {
     // === 필터 상태 복원 (URL 파라미터에서) ===
     const params = new URLSearchParams(window.location.search);
-    ['suitability', 'case_category', 'stage'].forEach(function (name) {
+    ['suitability', 'case_category', 'stage', 'region'].forEach(function (name) {
         const val = params.get(name);
         if (val) {
             const sel = document.getElementById(name);

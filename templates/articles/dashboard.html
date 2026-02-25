@@ -95,6 +95,14 @@
                         </select>
                     </div>
                     <div class="filter-group">
+                        <label for="region">국내/해외</label>
+                        <select name="region" id="region">
+                            <option value="">전체</option>
+                            <option value="국내">국내</option>
+                            <option value="해외">해외</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
                         <label for="date_from">시작일</label>
                         <input type="date" name="date_from" id="date_from">
                     </div>
@@ -118,6 +126,7 @@
                 <thead>
                     <tr>
                         <th class="col-suitability">적합도</th>
+                        <th class="col-region">지역</th>
                         <th class="col-title">제목</th>
                         <th class="col-category">사건 분야</th>
                         <th class="col-defendant">상대방</th>
@@ -135,6 +144,9 @@
                             </span>
                         </td>
                         <td>
+                            <span class="badge badge-region-{{ article.region }}">{{ article.region }}</span>
+                        </td>
+                        <td>
                             <a href="{% url 'articles:detail' article.id %}" class="article-link">
                                 {{ article.title }}
                             </a>
@@ -147,7 +159,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="empty-message">수집된 기사가 없습니다.</td>
+                        <td colspan="8" class="empty-message">수집된 기사가 없습니다.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

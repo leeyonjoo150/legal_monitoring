@@ -1,5 +1,7 @@
 /* === Reset & Base === */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -67,9 +69,17 @@ a {
     border-left: 4px solid;
 }
 
-.card-total { border-color: #1a1a2e; }
-.card-high { border-color: #e94560; }
-.card-medium { border-color: #f59e0b; }
+.card-total {
+    border-color: #1a1a2e;
+}
+
+.card-high {
+    border-color: #e94560;
+}
+
+.card-medium {
+    border-color: #f59e0b;
+}
 
 .card-label {
     font-size: 13px;
@@ -85,8 +95,13 @@ a {
     margin-top: 4px;
 }
 
-.card-high .card-value { color: #e94560; }
-.card-medium .card-value { color: #f59e0b; }
+.card-high .card-value {
+    color: #e94560;
+}
+
+.card-medium .card-value {
+    color: #f59e0b;
+}
 
 /* === Filters === */
 .filters {
@@ -218,13 +233,37 @@ tbody tr:hover {
     background: #f8fafc;
 }
 
-.col-suitability { width: 80px; }
-.col-title { min-width: 300px; }
-.col-category { width: 100px; }
-.col-defendant { width: 120px; }
-.col-stage { width: 110px; }
-.col-press { width: 120px; }
-.col-date { width: 130px; }
+.col-suitability {
+    width: 80px;
+}
+
+.col-region {
+    width: 70px;
+}
+
+.col-title {
+    min-width: 300px;
+}
+
+.col-category {
+    width: 100px;
+}
+
+.col-defendant {
+    width: 120px;
+}
+
+.col-stage {
+    width: 110px;
+}
+
+.col-press {
+    width: 120px;
+}
+
+.col-date {
+    width: 130px;
+}
 
 .article-link {
     color: #1a1a2e;
@@ -268,6 +307,18 @@ tbody tr:hover {
     background: #f0fdf4;
     color: #16a34a;
     border: 1px solid #bbf7d0;
+}
+
+.badge-region-국내 {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+.badge-region-해외 {
+    background: #faf5ff;
+    color: #9333ea;
+    border: 1px solid #e9d5ff;
 }
 
 .badge-lg {
@@ -489,8 +540,15 @@ tbody tr:hover {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .progress-header {
@@ -542,8 +600,13 @@ tbody tr:hover {
 }
 
 @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
 }
 
 .progress-current {
@@ -599,4 +662,3 @@ tbody tr:hover {
     color: #1a1a2e;
     margin-left: 2px;
 }
-

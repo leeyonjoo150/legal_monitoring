@@ -23,6 +23,12 @@ class Article(models.Model):
     stage = models.CharField(max_length=50, db_index=True)
     stage_detail = models.CharField(max_length=200)
     summary = models.TextField()
+    region = models.CharField(
+        max_length=10,
+        choices=[('국내', '국내'), ('해외', '해외')],
+        default='국내',
+        db_index=True,
+    )
 
     class Meta:
         ordering = ['-published_at']

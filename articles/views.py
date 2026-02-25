@@ -29,6 +29,10 @@ def _get_filtered_queryset(request):
     if stage:
         qs = qs.filter(stage=stage)
 
+    region = request.GET.get('region')
+    if region:
+        qs = qs.filter(region=region)
+
     date_from = request.GET.get('date_from')
     if date_from:
         qs = qs.filter(published_at__gte=datetime.fromisoformat(date_from))
@@ -68,6 +72,7 @@ def dashboard(request):
             'suitability': request.GET.get('suitability', ''),
             'case_category': request.GET.get('case_category', ''),
             'stage': request.GET.get('stage', ''),
+            'region': request.GET.get('region', ''),
             'date_from': request.GET.get('date_from', ''),
             'date_to': request.GET.get('date_to', ''),
         },
@@ -91,7 +96,7 @@ def export_xlsx(request):
 
     headers = [
         '제목', '언론사', '게재일', '적합도', '판단 근거',
-        '사건 분야', '상대방', '피해 규모', '진행 단계',
+        '사건 분야', '국내/해외', '상대방', '피해 규모', '진행 단계',
         '진행 단계 상세', '요약', '원문 링크',
     ]
     ws.append(headers)
@@ -110,6 +115,7 @@ def export_xlsx(request):
             article.suitability,
             article.suitability_reason,
             article.case_category,
+            article.region,
             article.defendant,
             article.damage_scale,
             article.stage,
@@ -118,7 +124,7 @@ def export_xlsx(request):
             article.url,
         ])
 
-    column_widths = [50, 15, 18, 10, 40, 15, 20, 25, 15, 25, 50, 50]
+    column_widths = [50, 15, 18, 10, 40, 15, 10, 20, 25, 15, 25, 50, 50]
     for i, width in enumerate(column_widths, 1):
         ws.column_dimensions[chr(64 + i)].width = width
 

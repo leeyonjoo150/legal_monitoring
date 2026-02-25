@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
+
 <body>
     <header class="header">
         <div class="container">
@@ -47,6 +49,12 @@
                         <div class="detail-value">{{ article.case_category }}</div>
                     </div>
                     <div class="detail-item">
+                        <div class="detail-label">국내/해외</div>
+                        <div class="detail-value">
+                            <span class="badge badge-region-{{ article.region }}">{{ article.region }}</span>
+                        </div>
+                    </div>
+                    <div class="detail-item">
                         <div class="detail-label">상대방</div>
                         <div class="detail-value">{{ article.defendant }}</div>
                     </div>
@@ -85,4 +93,5 @@
         </div>
     </footer>
 </body>
+
 </html>

@@ -42,6 +42,11 @@ stage 값은 반드시 아래 5개 중 하나만 사용하라. 다른 값은 절
 
 기사 내용으로 단계를 판단하기 어려운 경우, 가장 근접한 단계를 선택하라.
 
+## 국내/해외 분류
+region 값은 반드시 "국내" 또는 "해외" 중 하나만 사용하라.
+- 국내: 대한민국 내에서 발생한 사건
+- 해외: 외국에서 발생한 사건 (해외 기업, 해외 법원, 해외 피해자 등)
+
 ## 사건 중복 판단 기준
 기존 사건 목록과 비교하여 분석 대상 기사가 **동일한 사건**을 다루고 있으면 is_duplicate를 true로 설정하라.
 동일한 사건이란 기사 제목이 같은 것이 아니라, **같은 피해 주체가 같은 원인으로 피해를 입은 사건**을 의미한다.
@@ -60,6 +65,7 @@ stage 값은 반드시 아래 5개 중 하나만 사용하라. 다른 값은 절
   "damage_scale": "피해 규모",
   "stage": "진행 단계",
   "stage_detail": "진행 단계 상세",
+  "region": "국내",
   "summary": "2~3문장 요약"
 }
 ```"""
@@ -104,6 +110,7 @@ def _parse_response(text: str) -> dict | None:
 
 VALID_SUITABILITY = {'High', 'Medium', 'Low'}
 VALID_STAGES = {'피해 발생', '관련 절차 진행', '소송중', '판결 선고', '종결'}
+VALID_REGIONS = {'국내', '해외'}
 
 
 def _sanitize_result(result: dict, article: dict) -> dict:
@@ -118,6 +125,11 @@ def _sanitize_result(result: dict, article: dict) -> dict:
         print(f"[보정] stage '{result.get('stage')}' → '피해 발생'")
         result['stage'] = '피해 발생'
 
+    # region 보정
+    if result.get('region') not in VALID_REGIONS:
+        print(f"[보정] region '{result.get('region')}' → '국내'")
+        result['region'] = '국내'
+
     # 누락/null 필드 보정
     defaults = {
         'is_duplicate': False,
@@ -126,6 +138,7 @@ def _sanitize_result(result: dict, article: dict) -> dict:
         'defendant': '미상',
         'damage_scale': '미상',
         'stage_detail': '',
+        'region': '국내',
         'summary': article.get('description', ''),
     }
     for key, default in defaults.items():

@@ -82,7 +82,7 @@ def collect_and_analyze():
         thirty_days_ago = timezone.now() - timedelta(days=30)
         existing_articles = list(
             Article.objects.filter(collected_at__gte=thirty_days_ago)
-            .values('title', 'defendant', 'case_category')
+            .values('id', 'title', 'defendant', 'case_category')
         )
 
         # 4. Gemini 분석 + 저장
@@ -102,20 +102,34 @@ def collect_and_analyze():
                 continue
 
             if result.get('is_duplicate', False):
-                SkippedURL.objects.get_or_create(url=article['url'])
+                related = Article.objects.filter(id=result.get('duplicate_of_id')).first()
+                SkippedURL.objects.get_or_create(
+                    url=article['url'],
+                    defaults={
+                        'title': article['title'],
+                        'press': article['press'],
+                        'related_article': related,
+                    }
+                )
                 skipped_duplicate += 1
                 update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
                 print(f"[중복 사건] 건너뜀: {article['title'][:50]}")
                 continue
 
             if result.get('is_fictional', False):
-                SkippedURL.objects.get_or_create(url=article['url'])
+                SkippedURL.objects.get_or_create(
+                    url=article['url'],
+                    defaults={
+                        'title': article['title'],
+                        'press': article['press'],
+                    }
+                )
                 skipped_duplicate += 1
                 update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
                 print(f"[가상 컨텐츠] 건너뜀: {article['title'][:50]}")
                 continue
 
-            Article.objects.create(
+            saved_article = Article.objects.create(
                 title=article['title'],
                 url=article['url'],
                 description=article['description'],
@@ -136,6 +150,7 @@ def collect_and_analyze():
 
             # 새로 저장한 기사를 기존 목록에 추가 (이후 분석에 반영)
             existing_articles.append({
+                'id': saved_article.id,
                 'title': article['title'],
                 'defendant': result['defendant'],
                 'case_category': result['case_category'],

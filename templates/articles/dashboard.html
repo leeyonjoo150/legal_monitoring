@@ -103,6 +103,29 @@
                         </select>
                     </div>
                     <div class="filter-group">
+                        <label for="is_reviewed">심사</label>
+                        <select name="is_reviewed" id="is_reviewed">
+                            <option value="">전체</option>
+                            <option value="false">미심사</option>
+                            <option value="true">심사완료</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="review_passed">통과</label>
+                        <select name="review_passed" id="review_passed">
+                            <option value="">전체</option>
+                            <option value="null">미결정</option>
+                            <option value="true">통과</option>
+                            <option value="false">미통과</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-row filter-row-second">
+                    <div class="filter-group">
+                        <label for="title">제목 검색</label>
+                        <input type="text" name="title" id="title" placeholder="제목 검색...">
+                    </div>
+                    <div class="filter-group">
                         <label for="date_from">시작일</label>
                         <input type="date" name="date_from" id="date_from">
                     </div>
@@ -113,8 +136,7 @@
                     <div class="filter-actions">
                         <button type="submit" class="btn btn-primary">검색</button>
                         <a href="{% url 'articles:dashboard' %}" class="btn btn-secondary">초기화</a>
-                        <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀
-                            내보내기</a>
+                        <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀 내보내기</a>
                     </div>
                 </div>
             </form>
@@ -133,11 +155,13 @@
                         <th class="col-stage">진행 단계</th>
                         <th class="col-press">언론사</th>
                         <th class="col-date">게재일</th>
+                        <th class="col-reviewed">심사</th>
+                        <th class="col-passed">통과</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for article in articles %}
-                    <tr>
+                    <tr data-id="{{ article.id }}">
                         <td>
                             <span class="badge badge-{{ article.suitability|lower }}">
                                 {{ article.suitability }}
@@ -156,10 +180,30 @@
                         <td>{{ article.stage }}</td>
                         <td>{{ article.press }}</td>
                         <td>{{ article.published_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <div class="review-cell" data-article-id="{{ article.id }}"
+                                data-is-reviewed="{{ article.is_reviewed|yesno:'true,false' }}"
+                                data-review-passed="{{ article.review_passed|yesno:'true,false,null' }}">
+                                <button class="btn-reviewed {% if article.is_reviewed %}active{% endif %}"
+                                    onclick="handleReviewClick(this, 'reviewed')">
+                                    {% if article.is_reviewed %}✓ 심사{% else %}미심사{% endif %}
+                                </button>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="review-cell" data-article-id="{{ article.id }}"
+                                data-is-reviewed="{{ article.is_reviewed|yesno:'true,false' }}"
+                                data-review-passed="{{ article.review_passed|yesno:'true,false,null' }}">
+                                <button class="btn-pass {% if article.review_passed %}active{% endif %}"
+                                    onclick="handleReviewClick(this, 'passed', true)">통과</button>
+                                <button class="btn-fail {% if article.review_passed == False %}active{% endif %}"
+                                    onclick="handleReviewClick(this, 'passed', false)">미통과</button>
+                            </div>
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="empty-message">수집된 기사가 없습니다.</td>
+                        <td colspan="10" class="empty-message">수집된 기사가 없습니다.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

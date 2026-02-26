@@ -1,8 +1,10 @@
+import json
 from datetime import datetime
 
 from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
@@ -29,6 +31,10 @@ def _get_filtered_queryset(request):
     if stage:
         qs = qs.filter(stage=stage)
 
+    title = request.GET.get('title')
+    if title:
+        qs = qs.filter(title__icontains=title)
+
     region = request.GET.get('region')
     if region:
         qs = qs.filter(region=region)
@@ -40,6 +46,20 @@ def _get_filtered_queryset(request):
     date_to = request.GET.get('date_to')
     if date_to:
         qs = qs.filter(published_at__lte=datetime.fromisoformat(date_to + 'T23:59:59'))
+
+    is_reviewed = request.GET.get('is_reviewed')
+    if is_reviewed == 'true':
+        qs = qs.filter(is_reviewed=True)
+    elif is_reviewed == 'false':
+        qs = qs.filter(is_reviewed=False)
+
+    review_passed = request.GET.get('review_passed')
+    if review_passed == 'true':
+        qs = qs.filter(review_passed=True)
+    elif review_passed == 'false':
+        qs = qs.filter(review_passed=False)
+    elif review_passed == 'null':
+        qs = qs.filter(review_passed__isnull=True)
 
     return qs
 
@@ -73,17 +93,28 @@ def dashboard(request):
             'case_category': request.GET.get('case_category', ''),
             'stage': request.GET.get('stage', ''),
             'region': request.GET.get('region', ''),
+            'title': request.GET.get('title', ''),
             'date_from': request.GET.get('date_from', ''),
             'date_to': request.GET.get('date_to', ''),
+            'is_reviewed': request.GET.get('is_reviewed', ''),
+            'review_passed': request.GET.get('review_passed', ''),
         },
     }
-    return render(request, 'articles/dashboard.html', context)
+    response = render(request, 'articles/dashboard.html', context)
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 def detail(request, article_id):
     """기사 상세 뷰."""
     article = get_object_or_404(Article, pk=article_id)
-    return render(request, 'articles/detail.html', {'article': article})
+    related_articles = article.duplicate_articles.filter(
+        related_article__isnull=False
+    ).order_by('-skipped_at')
+    return render(request, 'articles/detail.html', {
+        'article': article,
+        'related_articles': related_articles,
+    })
 
 
 def export_xlsx(request):
@@ -140,3 +171,59 @@ def export_xlsx(request):
 def progress_status(request):
     """분석 진행상황 JSON API."""
     return JsonResponse(get_progress())
+
+
+@csrf_exempt
+def toggle_review(request, article_id):
+    """심사 완료 / 통과 여부 토글 API."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method not allowed'}, status=405)
+
+    article = get_object_or_404(Article, pk=article_id)
+    data = json.loads(request.body)
+    action = data.get('action')
+
+    if action == 'reviewed':
+        article.is_reviewed = not article.is_reviewed
+        article.save(update_fields=['is_reviewed'])
+    elif action == 'passed':
+        article.review_passed = data.get('value')
+        article.save(update_fields=['review_passed'])
+
+    return JsonResponse({
+        'is_reviewed': article.is_reviewed,
+        'review_passed': article.review_passed,
+    })
+
+
+def api_articles_latest(request):
+    """after_id 이후 저장된 신규 기사 + 오늘 통계 반환."""
+    try:
+        after_id = int(request.GET.get('after_id', 0))
+    except (ValueError, TypeError):
+        after_id = 0
+
+    new_articles = _get_filtered_queryset(request).filter(id__gt=after_id).order_by('-id')[:50]
+
+    today = timezone.now().date()
+    today_qs = Article.objects.filter(collected_at__date=today)
+
+    return JsonResponse({
+        'articles': [
+            {
+                'id': a.id,
+                'suitability': a.suitability,
+                'region': a.region,
+                'title': a.title,
+                'case_category': a.case_category,
+                'defendant': a.defendant,
+                'stage': a.stage,
+                'press': a.press,
+                'published_at': a.published_at.strftime('%Y-%m-%d %H:%M'),
+            }
+            for a in new_articles
+        ],
+        'total_today': today_qs.count(),
+        'high_today': today_qs.filter(suitability='High').count(),
+        'medium_today': today_qs.filter(suitability='Medium').count(),
+    })

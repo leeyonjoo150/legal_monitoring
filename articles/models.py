@@ -29,6 +29,8 @@ class Article(models.Model):
         default='국내',
         db_index=True,
     )
+    is_reviewed = models.BooleanField(default=False)
+    review_passed = models.BooleanField(null=True, default=None)
 
     class Meta:
         ordering = ['-published_at']
@@ -39,7 +41,15 @@ class Article(models.Model):
 
 class SkippedURL(models.Model):
     url = models.URLField(unique=True)
+    title = models.CharField(max_length=500, default='')
+    press = models.CharField(max_length=100, default='')
     skipped_at = models.DateTimeField(auto_now_add=True)
+    related_article = models.ForeignKey(
+        'Article',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='duplicate_articles'
+    )
 
     def __str__(self):
         return self.url

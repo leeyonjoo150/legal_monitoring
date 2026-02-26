@@ -1,7 +1,8 @@
 import json
 import time
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from django.conf import settings
 
 CALL_INTERVAL = 4  # 초 (Tier 1 분당 한도 내 유지)
@@ -64,6 +65,7 @@ region 값은 반드시 "국내" 또는 "해외" 중 하나만 사용하라.
 {
   "is_fictional": false,
   "is_duplicate": false,
+  "duplicate_of_id": null,
   "suitability": "High",
   "suitability_reason": "판단 근거",
   "case_category": "사건 분야",
@@ -87,7 +89,7 @@ def _build_prompt(article: dict, existing_articles: list[dict]) -> str:
 """
     if existing_articles:
         for ea in existing_articles:
-            prompt += f"- 제목: {ea['title']} / 상대방: {ea['defendant']} / 사건분야: {ea['case_category']}\n"
+            prompt += f"- id: {ea['id']} / 제목: {ea['title']} / 상대방: {ea['defendant']} / 사건분야: {ea['case_category']}\n"
     else:
         prompt += "- (없음)\n"
 
@@ -139,6 +141,7 @@ def _sanitize_result(result: dict, article: dict) -> dict:
     # 누락/null 필드 보정
     defaults = {
         'is_duplicate': False,
+        'duplicate_of_id': None,
         'suitability_reason': '정보 부족',
         'case_category': '미분류',
         'defendant': '미상',
@@ -161,12 +164,14 @@ def analyze_article(article: dict, existing_articles: list[dict]) -> dict | None
     if _daily_call_count >= DAILY_LIMIT:
         print(f"[경고] 일일 호출 수 {_daily_call_count}회 - 한도 임박")
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(model_name='gemini-2.5-flash-lite')
-
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
     prompt = _build_prompt(article, existing_articles)
-    response = model.generate_content(
-        [SYSTEM_PROMPT, prompt],
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+        ),
     )
 
     _daily_call_count += 1

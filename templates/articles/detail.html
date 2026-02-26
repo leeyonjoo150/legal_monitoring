@@ -72,10 +72,48 @@
                     </div>
                 </div>
 
+                <div class="review-section">
+                    <div class="review-cell" data-article-id="{{ article.id }}"
+                        data-is-reviewed="{{ article.is_reviewed|yesno:'true,false' }}"
+                        data-review-passed="{{ article.review_passed|yesno:'true,false,null' }}">
+                        <div class="review-group">
+                            <span class="review-label">심사</span>
+                            <button class="btn-reviewed {% if article.is_reviewed %}active{% endif %}"
+                                onclick="handleReviewClick(this, 'reviewed')">
+                                {% if article.is_reviewed %}✓ 심사완료{% else %}미심사{% endif %}
+                            </button>
+                        </div>
+                        <div class="review-group">
+                            <span class="review-label">통과</span>
+                            <button class="btn-pass {% if article.review_passed %}active{% endif %}"
+                                onclick="handleReviewClick(this, 'passed', true)">통과</button>
+                            <button class="btn-fail {% if article.review_passed == False %}active{% endif %}"
+                                onclick="handleReviewClick(this, 'passed', false)">미통과</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="detail-section">
                     <h3>네이버 요약문</h3>
                     <p class="description-text">{{ article.description }}</p>
                 </div>
+
+                {% if related_articles %}
+                <div class="related-articles">
+                    <button class="related-toggle" onclick="toggleRelated(this)">
+                        관련 기사 {{ related_articles|length }}건 <span class="toggle-icon">▼</span>
+                    </button>
+                    <ul class="related-list" style="display: none;">
+                        {% for dup in related_articles %}
+                        <li class="related-item">
+                            <span class="related-press">{{ dup.press }}</span>
+                            <span class="related-title">{{ dup.title }}</span>
+                            <a href="{{ dup.url }}" target="_blank" rel="noopener noreferrer" class="related-link">원문 →</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
 
                 <div class="detail-actions">
                     <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
@@ -92,6 +130,21 @@
             <p>Legal Radar &copy; 로앤굿</p>
         </div>
     </footer>
+    {% load static %}
+    <script src="{% static 'js/main.js' %}"></script>
+    <script>
+        function toggleRelated(btn) {
+            var list = btn.nextElementSibling;
+            var icon = btn.querySelector('.toggle-icon');
+            if (list.style.display === 'none') {
+                list.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                list.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+    </script>
 </body>
 
 </html>

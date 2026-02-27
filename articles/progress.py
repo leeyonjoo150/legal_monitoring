@@ -3,6 +3,8 @@
 import threading
 from datetime import datetime, timedelta
 
+SCHEDULER_INTERVAL_HOURS = 1
+
 _lock = threading.Lock()
 
 _progress = {
@@ -16,6 +18,9 @@ _progress = {
     'saved': 0,
     'skipped_duplicate': 0,
     'failed': 0,
+    'last_finished_at': None,      # 최근 분석 완료 시간
+    'previous_finished_at': None,  # 기존(이전) 완료 시간
+    'next_scheduled_at': None,     # 다음 분석 예상 시간
 }
 
 
@@ -80,6 +85,16 @@ def update_result(saved: int = 0, skipped_duplicate: int = 0, failed: int = 0):
 def finish():
     """작업 완료 표시."""
     with _lock:
+        now = datetime.now()
+        now_str = now.strftime('%Y-%m-%d %H:%M:%S')
+        next_run = now + timedelta(hours=SCHEDULER_INTERVAL_HOURS)
+        next_str = next_run.strftime('%Y-%m-%d %H:%M:%S')
+
+        # 기존 최근완료 → 이전완료로 이동
+        _progress['previous_finished_at'] = _progress['last_finished_at']
+        _progress['last_finished_at'] = now_str
+        _progress['next_scheduled_at'] = next_str
+
         _progress.update({
             'is_running': False,
             'phase': 'done',

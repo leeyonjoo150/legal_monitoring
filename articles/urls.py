@@ -11,4 +11,5 @@ urlpatterns = [
     path('api/progress/', views.progress_status, name='progress'),
     path('api/articles/latest/', views.api_articles_latest, name='articles_latest'),
     path('api/articles/<int:article_id>/review/', views.toggle_review, name='toggle_review'),
+    path('api/articles/<int:article_id>/suitability/', views.update_suitability, name='update_suitability'),
 ]

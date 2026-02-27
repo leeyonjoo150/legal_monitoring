@@ -41,7 +41,7 @@ async function handleReviewClick(btn, action, value) {
         document.querySelectorAll('.review-cell[data-article-id="' + articleId + '"]').forEach(function (c) {
             updateReviewCell(c, data);
         });
-    } catch (e) {}
+    } catch (e) { }
 }
 
 function updateReviewCell(cell, data) {
@@ -60,6 +60,55 @@ function updateReviewCell(cell, data) {
 
     var failBtn = cell.querySelector('.btn-fail');
     if (failBtn) failBtn.classList.toggle('active', data.review_passed === false);
+}
+
+var SUITABILITY_CYCLE = ['High', 'Medium', 'Low'];
+
+async function handleSuitabilityClick(badge) {
+    var articleId = badge.dataset.articleId;
+    var current = badge.dataset.suitability;
+    var idx = SUITABILITY_CYCLE.indexOf(current);
+    var next = SUITABILITY_CYCLE[(idx + 1) % SUITABILITY_CYCLE.length];
+
+    try {
+        var res = await fetch('/api/articles/' + articleId + '/suitability/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: JSON.stringify({ suitability: next }),
+        });
+        if (!res.ok) return;
+        var data = await res.json();
+
+        // 같은 기사의 모든 배지 업데이트 (목록 + 상세)
+        document.querySelectorAll('.badge-suitability[data-article-id="' + articleId + '"]').forEach(function (b) {
+            b.dataset.suitability = data.suitability;
+            b.textContent = data.suitability;
+            b.className = 'badge badge-' + data.suitability.toLowerCase() + ' badge-suitability badge-clickable';
+            if (b.classList.contains('badge-lg')) b.classList.add('badge-lg');
+        });
+
+        // 요약 카드도 갱신
+        fetchAndUpdateSummaryCards();
+    } catch (e) { }
+}
+
+async function fetchAndUpdateSummaryCards() {
+    try {
+        var filterParams = new URLSearchParams(window.location.search);
+        filterParams.set('after_id', '999999999');
+        var res = await fetch('/api/articles/latest/?' + filterParams.toString());
+        if (!res.ok) return;
+        var data = await res.json();
+        var totalEl = document.querySelector('.card-total .card-value');
+        var highEl = document.querySelector('.card-high .card-value');
+        var mediumEl = document.querySelector('.card-medium .card-value');
+        if (totalEl) totalEl.textContent = data.total_today + '건';
+        if (highEl) highEl.textContent = data.high_today + '건';
+        if (mediumEl) mediumEl.textContent = data.medium_today + '건';
+    } catch (e) { }
 }
 
 
@@ -99,6 +148,9 @@ function updateReviewCell(cell, data) {
         dup: document.getElementById('statDup'),
         fail: document.getElementById('statFail'),
         stats: document.getElementById('progressStats'),
+        lastFinished: document.getElementById('lastFinished'),
+        prevFinished: document.getElementById('prevFinished'),
+        nextScheduled: document.getElementById('nextScheduled'),
     };
 
     function formatTime(dtStr) {
@@ -109,7 +161,24 @@ function updateReviewCell(cell, data) {
 
     function updateUI(data) {
         if (!data.is_running && data.phase !== 'done') {
-            panel.style.display = 'none';
+            // 분석 중이 아니어도 시간 정보가 있으면 패널 표시
+            if (data.last_finished_at) {
+                panel.style.display = 'block';
+                panel.classList.remove('progress-collecting', 'progress-analyzing');
+                panel.classList.add('progress-done');
+                els.phase.textContent = '✅ 대기 중';
+                els.bar.style.width = '100%';
+                els.count.textContent = '';
+                els.title.textContent = '';
+                els.end.textContent = '';
+                els.start.textContent = '';
+                els.stats.style.display = 'none';
+                els.lastFinished.textContent = formatTime(data.last_finished_at);
+                els.prevFinished.textContent = formatTime(data.previous_finished_at);
+                els.nextScheduled.textContent = formatTime(data.next_scheduled_at);
+            } else {
+                panel.style.display = 'none';
+            }
             return;
         }
 
@@ -123,6 +192,9 @@ function updateReviewCell(cell, data) {
             els.count.textContent = '';
             els.title.textContent = '';
             els.end.textContent = '완료';
+            els.lastFinished.textContent = formatTime(data.last_finished_at);
+            els.prevFinished.textContent = formatTime(data.previous_finished_at);
+            els.nextScheduled.textContent = formatTime(data.next_scheduled_at);
 
             if (wasRunning) {
                 setTimeout(function () { location.reload(); }, 5000);
@@ -143,6 +215,9 @@ function updateReviewCell(cell, data) {
             els.start.textContent = formatTime(data.started_at);
             els.end.textContent = '수집 완료 후 계산';
             els.stats.style.display = 'none';
+            els.lastFinished.textContent = formatTime(data.last_finished_at);
+            els.prevFinished.textContent = formatTime(data.previous_finished_at);
+            els.nextScheduled.textContent = '분석 중...';
             return;
         }
 
@@ -167,6 +242,9 @@ function updateReviewCell(cell, data) {
         els.saved.textContent = data.saved || 0;
         els.dup.textContent = data.skipped_duplicate || 0;
         els.fail.textContent = data.failed || 0;
+        els.lastFinished.textContent = formatTime(data.last_finished_at);
+        els.prevFinished.textContent = formatTime(data.previous_finished_at);
+        els.nextScheduled.textContent = '분석 중...';
     }
 
     // === 실시간 기사 목록 + 요약 카드 업데이트 ===
@@ -188,7 +266,7 @@ function updateReviewCell(cell, data) {
         var tr = document.createElement('tr');
         tr.setAttribute('data-id', article.id);
         tr.innerHTML =
-            '<td><span class="badge badge-' + article.suitability.toLowerCase() + '">' + escapeHtml(article.suitability) + '</span></td>' +
+            '<td><span class="badge badge-' + article.suitability.toLowerCase() + ' badge-suitability badge-clickable" data-article-id="' + article.id + '" data-suitability="' + escapeHtml(article.suitability) + '" onclick="handleSuitabilityClick(this)">' + escapeHtml(article.suitability) + '</span></td>' +
             '<td><span class="badge badge-region-' + escapeHtml(article.region) + '">' + escapeHtml(article.region) + '</span></td>' +
             '<td><a href="/articles/' + article.id + '/" class="article-link">' + escapeHtml(article.title) + '</a></td>' +
             '<td>' + escapeHtml(article.case_category) + '</td>' +

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ article.title }} - Legal Radar</title>
+    <title>{{ article.title }} - Law&amp;Good</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
@@ -12,7 +12,7 @@
 <body>
     <header class="header">
         <div class="container">
-            <h1 class="logo"><a href="{% url 'articles:dashboard' %}">Legal Radar</a></h1>
+            <h1 class="logo"><a href="{% url 'articles:dashboard' %}">Law&amp;Good</a></h1>
             <p class="subtitle">소송금융 투자 검토 모니터링</p>
         </div>
     </header>
@@ -22,7 +22,9 @@
 
         <article class="detail-card">
             <div class="detail-header">
-                <span class="badge badge-{{ article.suitability|lower }} badge-lg">
+                <span class="badge badge-{{ article.suitability|lower }} badge-lg badge-suitability badge-clickable"
+                    data-article-id="{{ article.id }}" data-suitability="{{ article.suitability }}"
+                    onclick="handleSuitabilityClick(this)">
                     {{ article.suitability }}
                 </span>
                 <h2 class="detail-title">{{ article.title }}</h2>
@@ -108,7 +110,8 @@
                         <li class="related-item">
                             <span class="related-press">{{ dup.press }}</span>
                             <span class="related-title">{{ dup.title }}</span>
-                            <a href="{{ dup.url }}" target="_blank" rel="noopener noreferrer" class="related-link">원문 →</a>
+                            <a href="{{ dup.url }}" target="_blank" rel="noopener noreferrer" class="related-link">원문
+                                →</a>
                         </li>
                         {% endfor %}
                     </ul>
@@ -127,7 +130,7 @@
 
     <footer class="footer">
         <div class="container">
-            <p>Legal Radar &copy; 로앤굿</p>
+            <p>Law&amp;Good &copy; 로앤굿</p>
         </div>
     </footer>
     {% load static %}

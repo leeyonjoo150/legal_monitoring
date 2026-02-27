@@ -587,14 +587,38 @@ tbody tr:hover {
     white-space: nowrap;
 }
 
-.btn-reviewed:hover { border-color: #2563eb; color: #2563eb; }
-.btn-reviewed.active { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
+.btn-reviewed:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+}
 
-.btn-pass:hover { border-color: #16a34a; color: #16a34a; }
-.btn-pass.active { background: #f0fdf4; border-color: #16a34a; color: #16a34a; }
+.btn-reviewed.active {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #2563eb;
+}
 
-.btn-fail:hover { border-color: #dc2626; color: #dc2626; }
-.btn-fail.active { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
+.btn-pass:hover {
+    border-color: #16a34a;
+    color: #16a34a;
+}
+
+.btn-pass.active {
+    background: #f0fdf4;
+    border-color: #16a34a;
+    color: #16a34a;
+}
+
+.btn-fail:hover {
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
+.btn-fail.active {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #dc2626;
+}
 
 /* === Related Articles === */
 .related-articles {
@@ -818,4 +842,23 @@ tbody tr:hover {
 .stat strong {
     color: #1a1a2e;
     margin-left: 2px;
+}
+
+/* === Schedule Info === */
+.progress-schedule-info {
+    padding-top: 12px;
+    border-top: 1px dashed #e5e7eb;
+    flex-wrap: wrap;
+}
+
+/* === Clickable Suitability Badge === */
+.badge-clickable {
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+
+.badge-clickable:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Radar - 소송금융 모니터링</title>
+    <title>Law&amp;Good - 소송금융 모니터링</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
@@ -12,7 +12,7 @@
 <body>
     <header class="header">
         <div class="container">
-            <h1 class="logo">Legal Radar</h1>
+            <h1 class="logo">Law&amp;Good</h1>
             <p class="subtitle">소송금융 투자 검토 모니터링</p>
         </div>
     </header>
@@ -52,6 +52,20 @@
                 <div class="progress-time">
                     <span class="progress-time-label">종료 예상</span>
                     <span class="progress-time-value" id="progressEnd">계산 중...</span>
+                </div>
+            </div>
+            <div class="progress-info progress-schedule-info">
+                <div class="progress-time">
+                    <span class="progress-time-label">🕐 최근분석 완료</span>
+                    <span class="progress-time-value" id="lastFinished">-</span>
+                </div>
+                <div class="progress-time">
+                    <span class="progress-time-label">📋 기존완료시간</span>
+                    <span class="progress-time-value" id="prevFinished">-</span>
+                </div>
+                <div class="progress-time">
+                    <span class="progress-time-label">⏭️ 다음분석예상</span>
+                    <span class="progress-time-value" id="nextScheduled">-</span>
                 </div>
             </div>
             <div class="progress-stats" id="progressStats">
@@ -136,7 +150,8 @@
                     <div class="filter-actions">
                         <button type="submit" class="btn btn-primary">검색</button>
                         <a href="{% url 'articles:dashboard' %}" class="btn btn-secondary">초기화</a>
-                        <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀 내보내기</a>
+                        <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀
+                            내보내기</a>
                     </div>
                 </div>
             </form>
@@ -163,7 +178,9 @@
                     {% for article in articles %}
                     <tr data-id="{{ article.id }}">
                         <td>
-                            <span class="badge badge-{{ article.suitability|lower }}">
+                            <span class="badge badge-{{ article.suitability|lower }} badge-suitability badge-clickable"
+                                data-article-id="{{ article.id }}" data-suitability="{{ article.suitability }}"
+                                onclick="handleSuitabilityClick(this)">
                                 {{ article.suitability }}
                             </span>
                         </td>
@@ -242,7 +259,7 @@
 
     <footer class="footer">
         <div class="container">
-            <p>Legal Radar &copy; 로앤굿</p>
+            <p>Law&amp;Good &copy; 로앤굿</p>
         </div>
     </footer>
     <script src="{% static 'js/main.js' %}"></script>

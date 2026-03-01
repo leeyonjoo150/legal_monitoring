@@ -39,6 +39,23 @@ class Article(models.Model):
         return f'[{self.suitability}] {self.title}'
 
 
+class ArticleMemo(models.Model):
+    article = models.ForeignKey(
+        'Article',
+        on_delete=models.CASCADE,
+        related_name='memos',
+    )
+    author = models.CharField(max_length=50)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.author}: {self.content[:30]}'
+
+
 class SkippedURL(models.Model):
     url = models.URLField(unique=True)
     title = models.CharField(max_length=500, default='')

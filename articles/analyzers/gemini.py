@@ -30,7 +30,7 @@ SYSTEM_PROMPT = """당신은 소송금융 투자를 검토하는 심사역입니
 6. 이미 공적 절차(소송 제외)가 진행 중임 (검찰 수사, 정부 조사, 행정처분 등)
 
 ### 부적합 조건
-1. 이미 종결된 사건 (합의 완료, 판결 확정 등)
+1. 이미 종결된 사건 (합의 완료, 판결 확정 등) → stage가 "종결"이면 suitability는 반드시 "Low"
 
 ### 판정 기준
 suitability 값은 반드시 "High", "Medium", "Low" 중 하나만 사용하라. 다른 값은 절대 사용하지 마라.
@@ -126,6 +126,11 @@ def _sanitize_result(result: dict, article: dict) -> dict:
     # suitability 보정
     if result.get('suitability') not in VALID_SUITABILITY:
         print(f"[보정] suitability '{result.get('suitability')}' → 'Low'")
+        result['suitability'] = 'Low'
+
+    # 종결 사건은 반드시 Low
+    if result.get('stage') == '종결' and result.get('suitability') != 'Low':
+        print(f"[보정] stage=종결이므로 suitability '{result.get('suitability')}' → 'Low'")
         result['suitability'] = 'Low'
 
     # stage 보정

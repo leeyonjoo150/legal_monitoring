@@ -1,7 +1,8 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.core.paginator import Paginator
+from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
@@ -9,7 +10,7 @@ from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-from articles.models import Article
+from articles.models import Article, ArticleMemo, SkippedURL
 from articles.progress import get_progress
 
 ARTICLES_PER_PAGE = 30
@@ -20,7 +21,9 @@ def _get_filtered_queryset(request):
     qs = Article.objects.all()
 
     suitability = request.GET.get('suitability')
-    if suitability:
+    if suitability == 'High+Medium':
+        qs = qs.filter(suitability__in=['High', 'Medium'])
+    elif suitability:
         qs = qs.filter(suitability=suitability)
 
     case_category = request.GET.get('case_category')
@@ -325,3 +328,162 @@ def api_articles_latest(request):
         'high_today': today_qs.filter(suitability='High').count(),
         'medium_today': today_qs.filter(suitability='Medium').count(),
     })
+
+
+@api_view(['GET'])
+def api_charts(request):
+    """차트 데이터 API."""
+    try:
+        days = int(request.GET.get('days', 30))
+        if days < 1:
+            days = 1
+        elif days > 365:
+            days = 365
+    except (ValueError, TypeError):
+        days = 30
+
+    since = timezone.now() - timedelta(days=days)
+
+    # 진행 단계별 High 기사 수
+    STAGES = ['피해 발생', '관련 절차 진행', '소송중', '판결 선고', '종결']
+    high_qs = Article.objects.filter(suitability='High', collected_at__gte=since)
+    stage_counts = [high_qs.filter(stage=s).count() for s in STAGES]
+
+    # 심사 현황 (High + Medium)
+    review_qs = Article.objects.filter(
+        suitability__in=['High', 'Medium'],
+        collected_at__gte=since,
+    )
+    reviewed = review_qs.filter(is_reviewed=True).count()
+    unreviewed = review_qs.filter(is_reviewed=False).count()
+
+    # 중복 수 Top 10 (High only)
+    top10 = (
+        SkippedURL.objects
+        .filter(
+            related_article__isnull=False,
+            related_article__suitability='High',
+            skipped_at__gte=since,
+        )
+        .values('related_article_id', 'related_article__title')
+        .annotate(cnt=Count('id'))
+        .order_by('-cnt')[:10]
+    )
+
+    return Response({
+        'stage_high': {
+            'labels': STAGES,
+            'counts': stage_counts,
+        },
+        'review_status': {
+            'reviewed': reviewed,
+            'unreviewed': unreviewed,
+        },
+        'top10_duplicates': [
+            {
+                'id': item['related_article_id'],
+                'title': item['related_article__title'],
+                'count': item['cnt'],
+            }
+            for item in top10
+        ],
+    })
+
+
+@api_view(['POST'])
+def add_memo(request, article_id):
+    """메모 추가 API."""
+    article = get_object_or_404(Article, pk=article_id)
+    author = request.data.get('author', '').strip()
+    content = request.data.get('content', '').strip()
+
+    if not content:
+        return Response({'error': '내용을 입력해주세요.'}, status=400)
+    if not author:
+        return Response({'error': '작성자를 입력해주세요.'}, status=400)
+
+    memo = ArticleMemo.objects.create(
+        article=article,
+        author=author,
+        content=content,
+    )
+
+    return Response({
+        'id': memo.id,
+        'author': memo.author,
+        'content': memo.content,
+        'created_at': memo.created_at.strftime('%Y-%m-%d %H:%M'),
+    })
+
+
+@api_view(['GET'])
+def api_pdf_articles(request):
+    """PDF 팝업용 기사 목록 (필터 + max_id 스냅샷 적용)."""
+    try:
+        max_id = int(request.GET.get('max_id', 0))
+    except (ValueError, TypeError):
+        max_id = 0
+
+    qs = _get_filtered_queryset(request)
+    if max_id > 0:
+        qs = qs.filter(id__lte=max_id)
+
+    articles = list(qs.values(
+        'id', 'suitability', 'region', 'title', 'case_category',
+        'defendant', 'stage', 'press', 'published_at',
+    ))
+
+    for a in articles:
+        if hasattr(a['published_at'], 'strftime'):
+            a['published_at'] = a['published_at'].strftime('%Y-%m-%d %H:%M')
+
+    return Response({
+        'articles': articles,
+        'total': len(articles),
+    })
+
+
+@api_view(['GET'])
+def api_pdf_article_details(request):
+    """PDF용 선택 기사 상세 데이터 (전체 필드 + 메모)."""
+    ids_str = request.GET.get('ids', '')
+    if not ids_str:
+        return Response({'articles': []})
+
+    try:
+        ids = [int(i) for i in ids_str.split(',') if i.strip()]
+    except ValueError:
+        return Response({'error': 'invalid ids'}, status=400)
+
+    articles_qs = Article.objects.filter(id__in=ids).prefetch_related('memos')
+
+    id_to_article = {}
+    for article in articles_qs:
+        id_to_article[article.id] = {
+            'id': article.id,
+            'title': article.title,
+            'press': article.press,
+            'published_at': article.published_at.strftime('%Y-%m-%d %H:%M'),
+            'suitability': article.suitability,
+            'suitability_reason': article.suitability_reason,
+            'case_category': article.case_category,
+            'defendant': article.defendant,
+            'damage_scale': article.damage_scale,
+            'stage': article.stage,
+            'stage_detail': article.stage_detail,
+            'summary': article.summary,
+            'region': article.region,
+            'memos': [
+                {
+                    'author': m.author,
+                    'content': m.content,
+                    'created_at': m.created_at.strftime('%Y-%m-%d %H:%M'),
+                }
+                for m in article.memos.all()
+            ],
+        }
+
+    # 선택 순서 유지
+    ordered = [id_to_article[i] for i in ids if i in id_to_article]
+
+    return Response({'articles': ordered})

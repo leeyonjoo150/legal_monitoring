@@ -7,6 +7,7 @@
     <title>Law&amp;Good - 소송금융 모니터링</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 
 <body>
@@ -31,6 +32,53 @@
             <div class="card card-medium">
                 <div class="card-label">Medium</div>
                 <div class="card-value">{{ medium_today }}건</div>
+            </div>
+        </section>
+
+        <!-- 차트 섹션 -->
+        <section class="charts-section">
+            <div class="charts-header">
+                <span class="charts-title">분석 현황</span>
+                <div class="charts-period">
+                    <label for="chartDays">최근</label>
+                    <input type="number" id="chartDays" min="1" max="365" placeholder="30">
+                    <span class="charts-period-unit">일</span>
+                </div>
+            </div>
+            <div class="charts-grid">
+                <!-- 진행 단계별 High -->
+                <div class="chart-card">
+                    <div class="chart-card-header" onclick="toggleChart('stage')">
+                        <span class="chart-card-title">진행 단계별 High 기사 <span class="chart-badge">High</span></span>
+                        <span class="chart-toggle-icon" id="chartStageIcon">▲</span>
+                    </div>
+                    <div class="chart-card-body" id="chartStageBody">
+                        <canvas id="chartStage"></canvas>
+                        <p class="chart-empty" id="chartStageEmpty" style="display:none">데이터 없음</p>
+                    </div>
+                </div>
+                <!-- 심사 현황 -->
+                <div class="chart-card">
+                    <div class="chart-card-header" onclick="toggleChart('review')">
+                        <span class="chart-card-title">심사 현황 <span class="chart-badge chart-badge-hm">High+Medium</span></span>
+                        <span class="chart-toggle-icon" id="chartReviewIcon">▲</span>
+                    </div>
+                    <div class="chart-card-body chart-card-body-donut" id="chartReviewBody">
+                        <canvas id="chartReview"></canvas>
+                        <p class="chart-empty" id="chartReviewEmpty" style="display:none">데이터 없음</p>
+                    </div>
+                </div>
+                <!-- 중복 수 Top 10 -->
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header" onclick="toggleChart('top10')">
+                        <span class="chart-card-title">중복 기사 수 Top 10 <span class="chart-badge">High</span></span>
+                        <span class="chart-toggle-icon" id="chartTop10Icon">▲</span>
+                    </div>
+                    <div class="chart-card-body" id="chartTop10Body">
+                        <canvas id="chartTop10"></canvas>
+                        <p class="chart-empty" id="chartTop10Empty" style="display:none">데이터 없음</p>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -85,6 +133,7 @@
                             <option value="">전체</option>
                             <option value="High">High</option>
                             <option value="Medium">Medium</option>
+                            <option value="High+Medium">High+Medium</option>
                             <option value="Low">Low</option>
                         </select>
                     </div>
@@ -152,6 +201,7 @@
                         <a href="{% url 'articles:dashboard' %}" class="btn btn-secondary">초기화</a>
                         <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀
                             내보내기</a>
+                        <button type="button" class="btn btn-pdf" onclick="openPdfModal()">PDF 만들기</button>
                     </div>
                 </div>
             </form>
@@ -262,6 +312,35 @@
             <p>Law&amp;Good &copy; 로앤굿</p>
         </div>
     </footer>
+    <!-- PDF 기사 선택 모달 -->
+    <div id="pdfModal" class="pdf-modal-overlay" style="display: none;">
+        <div class="pdf-modal">
+            <div class="pdf-modal-header">
+                <h3 class="pdf-modal-title">PDF 생성 - 기사 선택</h3>
+                <button class="pdf-modal-close" onclick="closePdfModal()">&times;</button>
+            </div>
+            <div class="pdf-modal-controls">
+                <label class="pdf-select-all-label">
+                    <input type="checkbox" id="pdfSelectAll" onchange="selectAllPdf(this.checked)">
+                    전체 선택/해제
+                </label>
+                <span id="pdfModalCount" class="pdf-modal-count"></span>
+            </div>
+            <div class="pdf-modal-loading" id="pdfModalLoading">기사를 불러오는 중...</div>
+            <ul class="pdf-article-list" id="pdfArticleList" style="display: none;"></ul>
+            <div class="pdf-modal-footer">
+                <p class="pdf-modal-hint">선택 없이 생성하면 차트 + 전체 목록만 출력됩니다.</p>
+                <div class="pdf-modal-actions">
+                    <button class="btn btn-secondary" onclick="closePdfModal()">취소</button>
+                    <button class="btn btn-primary" onclick="generatePdf()">PDF 생성</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF 출력 영역 (화면에는 숨김, 인쇄 시에만 표시) -->
+    <div id="printArea"></div>
+
     <script src="{% static 'js/main.js' %}"></script>
 </body>
 

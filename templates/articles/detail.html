@@ -124,6 +124,29 @@
                     </a>
                     <a href="{% url 'articles:dashboard' %}" class="btn btn-secondary">목록으로</a>
                 </div>
+
+                <!-- 메모 섹션 -->
+                <div class="memo-section">
+                    <h3 class="memo-title">메모</h3>
+                    <div class="memo-form">
+                        <input type="text" id="memoAuthor" class="memo-author-input" placeholder="작성자">
+                        <textarea id="memoContent" class="memo-content-input" placeholder="메모를 입력하세요..." rows="3"></textarea>
+                        <button class="btn btn-primary memo-submit" onclick="submitMemo({{ article.id }})">저장</button>
+                    </div>
+                    <ul class="memo-list" id="memoList">
+                        {% for memo in article.memos.all %}
+                        <li class="memo-item">
+                            <div class="memo-meta">
+                                <span class="memo-author">{{ memo.author }}</span>
+                                <span class="memo-date">{{ memo.created_at|date:"Y-m-d H:i" }}</span>
+                            </div>
+                            <p class="memo-content">{{ memo.content }}</p>
+                        </li>
+                        {% empty %}
+                        <li class="memo-empty" id="memoEmpty">아직 메모가 없습니다.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
         </article>
     </main>

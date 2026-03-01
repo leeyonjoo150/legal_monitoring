@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
+from django.db import IntegrityError
 from django.utils import timezone
+from plyer import notification
 
 from articles.collectors.naver import collect_all_news
 from articles.analyzers.gemini import analyze_with_retry
@@ -50,6 +52,12 @@ def collect_and_analyze():
     print(f"\n{'='*50}")
     print(f"[스케줄러] 수집 시작: {timezone.now()}")
     print(f"{'='*50}")
+
+    notification.notify(
+        title='Law&Good',
+        message='기사 수집을 시작합니다.',
+        timeout=5,
+    )
 
     # 진행상황: 수집 시작
     start_collection()
@@ -129,22 +137,28 @@ def collect_and_analyze():
                 print(f"[가상 컨텐츠] 건너뜀: {article['title'][:50]}")
                 continue
 
-            saved_article = Article.objects.create(
-                title=article['title'],
-                url=article['url'],
-                description=article['description'],
-                press=article['press'],
-                published_at=article['published_at'],
-                suitability=result['suitability'],
-                suitability_reason=result['suitability_reason'],
-                case_category=result['case_category'],
-                defendant=result['defendant'],
-                damage_scale=result['damage_scale'],
-                stage=result['stage'],
-                stage_detail=result['stage_detail'],
-                summary=result['summary'],
-                region=result['region'],
-            )
+            try:
+                saved_article = Article.objects.create(
+                    title=article['title'],
+                    url=article['url'],
+                    description=article['description'],
+                    press=article['press'],
+                    published_at=article['published_at'],
+                    suitability=result['suitability'],
+                    suitability_reason=result['suitability_reason'],
+                    case_category=result['case_category'],
+                    defendant=result['defendant'],
+                    damage_scale=result['damage_scale'],
+                    stage=result['stage'],
+                    stage_detail=result['stage_detail'],
+                    summary=result['summary'],
+                    region=result['region'],
+                )
+            except IntegrityError:
+                print(f"[중복 URL] 건너뜀: {article['url'][:60]}")
+                skipped_duplicate += 1
+                update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
+                continue
             saved_count += 1
             update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
 
@@ -157,6 +171,11 @@ def collect_and_analyze():
             })
 
         print(f"\n[완료] 저장: {saved_count}건 / 중복 사건: {skipped_duplicate}건 / 분석 실패: {failed_count}건")
+        notification.notify(
+            title='Law&Good',
+            message=f'기사 수집 완료 — 저장 {saved_count}건 / 중복 {skipped_duplicate}건 / 실패 {failed_count}건',
+            timeout=15,
+        )
     finally:
         # 항상 완료 상태로 전환
         finish()

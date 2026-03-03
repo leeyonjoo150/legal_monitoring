@@ -346,13 +346,13 @@ def api_charts(request):
 
     # 진행 단계별 High 기사 수
     STAGES = ['피해 발생', '관련 절차 진행', '소송중', '판결 선고', '종결']
-    high_qs = Article.objects.filter(suitability='High', collected_at__gte=since)
+    high_qs = Article.objects.filter(suitability='High', published_at__gte=since)
     stage_counts = [high_qs.filter(stage=s).count() for s in STAGES]
 
     # 심사 현황 (High + Medium)
     review_qs = Article.objects.filter(
         suitability__in=['High', 'Medium'],
-        collected_at__gte=since,
+        published_at__gte=since,
     )
     reviewed = review_qs.filter(is_reviewed=True).count()
     unreviewed = review_qs.filter(is_reviewed=False).count()
@@ -363,7 +363,7 @@ def api_charts(request):
         .filter(
             related_article__isnull=False,
             related_article__suitability='High',
-            skipped_at__gte=since,
+            related_article__published_at__gte=since,
         )
         .values('related_article_id', 'related_article__title')
         .annotate(cnt=Count('id'))
@@ -464,6 +464,7 @@ def api_pdf_article_details(request):
             'title': article.title,
             'press': article.press,
             'published_at': article.published_at.strftime('%Y-%m-%d %H:%M'),
+            'ai_suitability': article.ai_suitability,
             'suitability': article.suitability,
             'suitability_reason': article.suitability_reason,
             'case_category': article.case_category,

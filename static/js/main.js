@@ -828,6 +828,9 @@ async function fetchAndUpdateSummaryCards() {
                 html += '<div class="print-detail-card">';
                 html += '<div class="print-detail-header">';
                 html += '<span class="print-badge print-badge-' + escapeHtml(a.suitability.toLowerCase()) + '">' + escapeHtml(a.suitability) + '</span>';
+                if (a.ai_suitability && a.ai_suitability !== a.suitability) {
+                    html += '<span class="print-ai-note">AI 원본: ' + escapeHtml(a.ai_suitability) + ' → 수정됨</span>';
+                }
                 html += '<h3 class="print-detail-title">' + escapeHtml(a.title) + '</h3>';
                 html += '<p class="print-detail-meta">' + escapeHtml(a.press) + ' &middot; ' + escapeHtml(a.published_at) + ' &middot; ' + escapeHtml(a.region) + '</p>';
                 html += '</div>';

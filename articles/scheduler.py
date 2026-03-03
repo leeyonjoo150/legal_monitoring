@@ -144,6 +144,7 @@ def collect_and_analyze():
                     description=article['description'],
                     press=article['press'],
                     published_at=article['published_at'],
+                    ai_suitability=result['suitability'],
                     suitability=result['suitability'],
                     suitability_reason=result['suitability_reason'],
                     case_category=result['case_category'],

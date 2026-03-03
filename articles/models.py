@@ -11,6 +11,11 @@ class Article(models.Model):
     collected_at = models.DateTimeField(auto_now_add=True)
 
     # 분석 결과
+    ai_suitability = models.CharField(
+        max_length=10,
+        choices=[('High', 'High'), ('Medium', 'Medium'), ('Low', 'Low')],
+        default='',
+    )
     suitability = models.CharField(
         max_length=10,
         choices=[('High', 'High'), ('Medium', 'Medium'), ('Low', 'Low')],

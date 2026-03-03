@@ -22,11 +22,16 @@
 
         <article class="detail-card">
             <div class="detail-header">
-                <span class="badge badge-{{ article.suitability|lower }} badge-lg badge-suitability badge-clickable"
-                    data-article-id="{{ article.id }}" data-suitability="{{ article.suitability }}"
-                    onclick="handleSuitabilityClick(this)">
-                    {{ article.suitability }}
-                </span>
+                <div class="suitability-row">
+                    <span class="badge badge-{{ article.suitability|lower }} badge-lg badge-suitability badge-clickable"
+                        data-article-id="{{ article.id }}" data-suitability="{{ article.suitability }}"
+                        onclick="handleSuitabilityClick(this)">
+                        {{ article.suitability }}
+                    </span>
+                    {% if article.ai_suitability and article.ai_suitability != article.suitability %}
+                    <span class="ai-suitability-note">AI 원본: {{ article.ai_suitability }} → 수정됨</span>
+                    {% endif %}
+                </div>
                 <h2 class="detail-title">{{ article.title }}</h2>
                 <div class="detail-meta">
                     <span>{{ article.press }}</span>

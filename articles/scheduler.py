@@ -1,10 +1,15 @@
 from datetime import datetime, timedelta
 
+from django.db import IntegrityError
 from django.utils import timezone
+from plyer import notification
 
 from articles.collectors.naver import collect_all_news
 from articles.analyzers.gemini import analyze_with_retry
 from articles.models import Article, SkippedURL
+from articles.progress import (
+    start_collection, start_analysis, update_progress, update_result, finish,
+)
 
 # 경과 시간별 키워드당 수집 건수
 DISPLAY_TIERS = [
@@ -48,74 +53,133 @@ def collect_and_analyze():
     print(f"[스케줄러] 수집 시작: {timezone.now()}")
     print(f"{'='*50}")
 
-    # 1. 경과 시간에 따라 수집량 결정 + 네이버 뉴스 수집
-    display_count = _get_display_count()
-    print(f"[수집량] 키워드당 {display_count}건 (경과 시간 기반 자동 설정)")
-    raw_articles = collect_all_news(display=display_count)
-
-    # 2. URL 기준 DB 중복 제거 (Article + SkippedURL 통합 체크)
-    existing_urls = set(
-        Article.objects.values_list('url', flat=True)
-    )
-    skipped_urls = set(
-        SkippedURL.objects.values_list('url', flat=True)
-    )
-    all_known_urls = existing_urls | skipped_urls
-    new_articles = [a for a in raw_articles if a['url'] not in all_known_urls]
-    print(f"[필터] 신규 기사: {len(new_articles)}건 (Article {len(existing_urls)}건 + SkippedURL {len(skipped_urls)}건 제외)")
-
-    if not new_articles:
-        print("[완료] 신규 기사 없음")
-        return
-
-    # 3. 최근 30일 기사 목록 (중복 사건 판단용)
-    thirty_days_ago = timezone.now() - timedelta(days=30)
-    existing_articles = list(
-        Article.objects.filter(collected_at__gte=thirty_days_ago)
-        .values('title', 'defendant', 'case_category')
+    notification.notify(
+        title='Law&Good',
+        message='기사 수집을 시작합니다.',
+        timeout=5,
     )
 
-    # 4. Gemini 분석 + 저장
-    saved_count = 0
-    skipped_duplicate = 0
+    # 진행상황: 수집 시작
+    start_collection()
 
-    for article in new_articles:
-        result = analyze_with_retry(article, existing_articles)
+    try:
+        # 1. 경과 시간에 따라 수집량 결정 + 네이버 뉴스 수집
+        display_count = _get_display_count()
+        print(f"[수집량] 키워드당 {display_count}건 (경과 시간 기반 자동 설정)")
+        raw_articles = collect_all_news(display=display_count)
 
-        if result is None:
-            continue
-
-        if result.get('is_duplicate', False):
-            SkippedURL.objects.get_or_create(url=article['url'])
-            skipped_duplicate += 1
-            print(f"[중복 사건] 건너뜀: {article['title'][:50]}")
-            continue
-
-        Article.objects.create(
-            title=article['title'],
-            url=article['url'],
-            description=article['description'],
-            press=article['press'],
-            published_at=article['published_at'],
-            suitability=result['suitability'],
-            suitability_reason=result['suitability_reason'],
-            case_category=result['case_category'],
-            defendant=result['defendant'],
-            damage_scale=result['damage_scale'],
-            stage=result['stage'],
-            stage_detail=result['stage_detail'],
-            summary=result['summary'],
+        # 2. URL 기준 DB 중복 제거 (Article + SkippedURL 통합 체크)
+        existing_urls = set(
+            Article.objects.values_list('url', flat=True)
         )
-        saved_count += 1
+        skipped_urls = set(
+            SkippedURL.objects.values_list('url', flat=True)
+        )
+        all_known_urls = existing_urls | skipped_urls
+        new_articles = [a for a in raw_articles if a['url'] not in all_known_urls]
+        print(f"[필터] 신규 기사: {len(new_articles)}건 (Article {len(existing_urls)}건 + SkippedURL {len(skipped_urls)}건 제외)")
 
-        # 새로 저장한 기사를 기존 목록에 추가 (이후 분석에 반영)
-        existing_articles.append({
-            'title': article['title'],
-            'defendant': result['defendant'],
-            'case_category': result['case_category'],
-        })
+        if not new_articles:
+            print("[완료] 신규 기사 없음")
+            return
 
-    print(f"\n[완료] 저장: {saved_count}건 / 중복 사건: {skipped_duplicate}건 / 분석 실패: {len(new_articles) - saved_count - skipped_duplicate}건")
+        # 진행상황: 분석 시작
+        start_analysis(total=len(new_articles))
+
+        # 3. 최근 30일 기사 목록 (중복 사건 판단용)
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        existing_articles = list(
+            Article.objects.filter(collected_at__gte=thirty_days_ago)
+            .values('id', 'title', 'defendant', 'case_category')
+        )
+
+        # 4. Gemini 분석 + 저장
+        saved_count = 0
+        skipped_duplicate = 0
+        failed_count = 0
+
+        for idx, article in enumerate(new_articles, 1):
+            # 진행상황 업데이트
+            update_progress(current=idx, title=article['title'][:60])
+
+            result = analyze_with_retry(article, existing_articles)
+
+            if result is None:
+                failed_count += 1
+                update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
+                continue
+
+            if result.get('is_duplicate', False):
+                related = Article.objects.filter(id=result.get('duplicate_of_id')).first()
+                SkippedURL.objects.get_or_create(
+                    url=article['url'],
+                    defaults={
+                        'title': article['title'],
+                        'press': article['press'],
+                        'related_article': related,
+                    }
+                )
+                skipped_duplicate += 1
+                update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
+                print(f"[중복 사건] 건너뜀: {article['title'][:50]}")
+                continue
+
+            if result.get('is_fictional', False):
+                SkippedURL.objects.get_or_create(
+                    url=article['url'],
+                    defaults={
+                        'title': article['title'],
+                        'press': article['press'],
+                    }
+                )
+                skipped_duplicate += 1
+                update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
+                print(f"[가상 컨텐츠] 건너뜀: {article['title'][:50]}")
+                continue
+
+            try:
+                saved_article = Article.objects.create(
+                    title=article['title'],
+                    url=article['url'],
+                    description=article['description'],
+                    press=article['press'],
+                    published_at=article['published_at'],
+                    ai_suitability=result['suitability'],
+                    suitability=result['suitability'],
+                    suitability_reason=result['suitability_reason'],
+                    case_category=result['case_category'],
+                    defendant=result['defendant'],
+                    damage_scale=result['damage_scale'],
+                    stage=result['stage'],
+                    stage_detail=result['stage_detail'],
+                    summary=result['summary'],
+                    region=result['region'],
+                )
+            except IntegrityError:
+                print(f"[중복 URL] 건너뜀: {article['url'][:60]}")
+                skipped_duplicate += 1
+                update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
+                continue
+            saved_count += 1
+            update_result(saved=saved_count, skipped_duplicate=skipped_duplicate, failed=failed_count)
+
+            # 새로 저장한 기사를 기존 목록에 추가 (이후 분석에 반영)
+            existing_articles.append({
+                'id': saved_article.id,
+                'title': article['title'],
+                'defendant': result['defendant'],
+                'case_category': result['case_category'],
+            })
+
+        print(f"\n[완료] 저장: {saved_count}건 / 중복 사건: {skipped_duplicate}건 / 분석 실패: {failed_count}건")
+        notification.notify(
+            title='Law&Good',
+            message=f'기사 수집 완료 — 저장 {saved_count}건 / 중복 {skipped_duplicate}건 / 실패 {failed_count}건',
+            timeout=15,
+        )
+    finally:
+        # 항상 완료 상태로 전환
+        finish()
 
 
 def start_scheduler():

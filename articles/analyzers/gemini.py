@@ -1,7 +1,8 @@
 import json
 import time
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from django.conf import settings
 
 CALL_INTERVAL = 4  # 초 (Tier 1 분당 한도 내 유지)
@@ -13,24 +14,35 @@ SYSTEM_PROMPT = """당신은 소송금융 투자를 검토하는 심사역입니
 
 아래 뉴스 기사를 분석하여 소송금융 투자 적합도를 판단하세요.
 
+## 가상 컨텐츠 제외
+기사가 드라마, 영화, 소설, 웹툰, 게임, 예능 등 **가상의 창작물(픽션) 속 사건**을 다루고 있으면 is_fictional을 true로 설정하라.
+실제 사건이 아닌 가상 컨텐츠는 분석 대상이 아니다.
+예: 드라마 속 소송, 영화 줄거리의 사기 사건, 게임 내 분쟁 스토리 등
+
 ## 소송금융 적합도 판단 기준
 
 ### 적합 조건
 1. 상대방 책임이 비교적 명확함 (잘못을 저지른 주체가 구체적으로 특정됨)
-2. 상대방에게 자력이 충분함 (대기업, 금융기관, 보험사, 상장회사, 공공기관 등)
-3. 집단적 피해 (동일 원인으로 다수(수십 명 이상)가 피해)
-4. 피해 규모가 큼 (수억 원 이상 또는 수만 명 이상)
-5. 증거가 있거나 확보 가능함 (공식 조사 결과, 정부 발표 등 객관적 증거 존재)
+   예: "ㅇㅇ건설이 부실 시공", "ㅇㅇ제약이 성분 허위 표시"
+2. 상대방에게 자력이 충분함 (대기업, 금융기관, 보험사, 상장회사, 공공기관 등 배상 능력이 충분한 주체)
+3. 집단적 피해 (동일한 원인으로 다수(수십 명 이상)가 피해를 입어 집단소송 가능성 있음)
+4. 피해 규모가 큼 (피해 금액이 수억 원 이상이거나 피해자 수가 수만 명 이상)
+   예: "투자 피해액 총 500억", "피해자 3,000명 추산"
+5. 증거가 있거나 확보 가능함 (공식 조사 결과, 정부 발표, 내부 문서 유출 등 객관적 증거 존재)
+   예: "식약처 검사 결과 발암물질 검출", "금감원 검사에서 적발"
 6. 이미 공적 절차(소송 제외)가 진행 중임 (검찰 수사, 정부 조사, 행정처분 등)
+   예: "검찰 기소", "공정위 과징금 부과", "금감원 제재"
+   단, 이미 손해배상 소송이 진행 중인 경우는 이 조건을 충족하지 않음
 
 ### 부적합 조건
-1. 이미 종결된 사건 (합의 완료, 판결 확정 등)
+1. 이미 종결된 사건 (합의 완료, 판결 확정 등) → stage가 "종결"이면 suitability는 반드시 "Low"
+2. 소송·분쟁 무관 기사: 단순 기업의 인수합병(M&A), 실적 발표, 신제품 출시, 단순 주가 등락(특징주) 소식 등 누군가의 '위법 행위'나 '피해 발생'과 무관한 일반 경제/주식 뉴스는 무조건 suitability를 "Low"로 설정하라. 소송이나 분쟁의 여지가 없는 뉴스 기사는 절대 High나 Medium을 주어서는 안 된다.
 
 ### 판정 기준
 suitability 값은 반드시 "High", "Medium", "Low" 중 하나만 사용하라. 다른 값은 절대 사용하지 마라.
-- High: 적합 조건 4개 이상 + 부적합 조건 없음
+- High: 적합 조건 4개 이상 + 부적합 조건 없음 / 또는 기타 소송금융 투자 가능성이 명백히 높은 경우
 - Medium: 적합 조건 2~3개 + 부적합 조건 없음
-- Low: 적합 조건 1개 이하 / 또는 부적합 조건 1개 이상 해당
+- Low: 적합 조건 1개 이하 / 또는 부적합 조건 1개 이상 해당 / 또는 기타 소송금융 투자가 어려운 이유가 있는 경우
 
 ## 진행 단계 분류
 stage 값은 반드시 아래 5개 중 하나만 사용하라. 다른 값은 절대 사용하지 마라.
@@ -42,6 +54,11 @@ stage 값은 반드시 아래 5개 중 하나만 사용하라. 다른 값은 절
 
 기사 내용으로 단계를 판단하기 어려운 경우, 가장 근접한 단계를 선택하라.
 
+## 국내/해외 분류
+region 값은 반드시 "국내" 또는 "해외" 중 하나만 사용하라.
+- 국내: 대한민국 내에서 발생한 사건
+- 해외: 외국에서 발생한 사건 (해외 기업, 해외 법원, 해외 피해자 등)
+
 ## 사건 중복 판단 기준
 기존 사건 목록과 비교하여 분석 대상 기사가 **동일한 사건**을 다루고 있으면 is_duplicate를 true로 설정하라.
 동일한 사건이란 기사 제목이 같은 것이 아니라, **같은 피해 주체가 같은 원인으로 피해를 입은 사건**을 의미한다.
@@ -52,7 +69,9 @@ stage 값은 반드시 아래 5개 중 하나만 사용하라. 다른 값은 절
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
 ```json
 {
+  "is_fictional": false,
   "is_duplicate": false,
+  "duplicate_of_id": null,
   "suitability": "High",
   "suitability_reason": "판단 근거",
   "case_category": "사건 분야",
@@ -60,6 +79,7 @@ stage 값은 반드시 아래 5개 중 하나만 사용하라. 다른 값은 절
   "damage_scale": "피해 규모",
   "stage": "진행 단계",
   "stage_detail": "진행 단계 상세",
+  "region": "국내",
   "summary": "2~3문장 요약"
 }
 ```"""
@@ -75,7 +95,7 @@ def _build_prompt(article: dict, existing_articles: list[dict]) -> str:
 """
     if existing_articles:
         for ea in existing_articles:
-            prompt += f"- 제목: {ea['title']} / 상대방: {ea['defendant']} / 사건분야: {ea['case_category']}\n"
+            prompt += f"- id: {ea['id']} / 제목: {ea['title']} / 상대방: {ea['defendant']} / 사건분야: {ea['case_category']}\n"
     else:
         prompt += "- (없음)\n"
 
@@ -104,6 +124,7 @@ def _parse_response(text: str) -> dict | None:
 
 VALID_SUITABILITY = {'High', 'Medium', 'Low'}
 VALID_STAGES = {'피해 발생', '관련 절차 진행', '소송중', '판결 선고', '종결'}
+VALID_REGIONS = {'국내', '해외'}
 
 
 def _sanitize_result(result: dict, article: dict) -> dict:
@@ -113,19 +134,31 @@ def _sanitize_result(result: dict, article: dict) -> dict:
         print(f"[보정] suitability '{result.get('suitability')}' → 'Low'")
         result['suitability'] = 'Low'
 
+    # 종결 사건은 반드시 Low
+    if result.get('stage') == '종결' and result.get('suitability') != 'Low':
+        print(f"[보정] stage=종결이므로 suitability '{result.get('suitability')}' → 'Low'")
+        result['suitability'] = 'Low'
+
     # stage 보정
     if result.get('stage') not in VALID_STAGES:
         print(f"[보정] stage '{result.get('stage')}' → '피해 발생'")
         result['stage'] = '피해 발생'
 
+    # region 보정
+    if result.get('region') not in VALID_REGIONS:
+        print(f"[보정] region '{result.get('region')}' → '국내'")
+        result['region'] = '국내'
+
     # 누락/null 필드 보정
     defaults = {
         'is_duplicate': False,
+        'duplicate_of_id': None,
         'suitability_reason': '정보 부족',
         'case_category': '미분류',
         'defendant': '미상',
         'damage_scale': '미상',
         'stage_detail': '',
+        'region': '국내',
         'summary': article.get('description', ''),
     }
     for key, default in defaults.items():
@@ -142,12 +175,14 @@ def analyze_article(article: dict, existing_articles: list[dict]) -> dict | None
     if _daily_call_count >= DAILY_LIMIT:
         print(f"[경고] 일일 호출 수 {_daily_call_count}회 - 한도 임박")
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(model_name='gemini-2.5-flash')
-
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
     prompt = _build_prompt(article, existing_articles)
-    response = model.generate_content(
-        [SYSTEM_PROMPT, prompt],
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+        ),
     )
 
     _daily_call_count += 1

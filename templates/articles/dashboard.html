@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Radar - 소송금융 모니터링</title>
+    <title>Law&amp;Good - 소송금융 모니터링</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
+
 <body>
     <header class="header">
         <div class="container">
-            <h1 class="logo">Legal Radar</h1>
+            <h1 class="logo">Law&amp;Good</h1>
             <p class="subtitle">소송금융 투자 검토 모니터링</p>
         </div>
     </header>
@@ -32,6 +35,94 @@
             </div>
         </section>
 
+        <!-- 차트 섹션 -->
+        <section class="charts-section">
+            <div class="charts-header">
+                <span class="charts-title">분석 현황</span>
+                <div class="charts-period">
+                    <label for="chartDays">최근</label>
+                    <input type="number" id="chartDays" min="1" max="365" placeholder="30">
+                    <span class="charts-period-unit">일</span>
+                </div>
+            </div>
+            <div class="charts-grid">
+                <!-- 진행 단계별 High -->
+                <div class="chart-card">
+                    <div class="chart-card-header" onclick="toggleChart('stage')">
+                        <span class="chart-card-title">진행 단계별 High 기사 <span class="chart-badge">High</span></span>
+                        <span class="chart-toggle-icon" id="chartStageIcon">▲</span>
+                    </div>
+                    <div class="chart-card-body" id="chartStageBody">
+                        <canvas id="chartStage"></canvas>
+                        <p class="chart-empty" id="chartStageEmpty" style="display:none">데이터 없음</p>
+                    </div>
+                </div>
+                <!-- 심사 현황 -->
+                <div class="chart-card">
+                    <div class="chart-card-header" onclick="toggleChart('review')">
+                        <span class="chart-card-title">심사 현황 <span class="chart-badge chart-badge-hm">High+Medium</span></span>
+                        <span class="chart-toggle-icon" id="chartReviewIcon">▲</span>
+                    </div>
+                    <div class="chart-card-body chart-card-body-donut" id="chartReviewBody">
+                        <canvas id="chartReview"></canvas>
+                        <p class="chart-empty" id="chartReviewEmpty" style="display:none">데이터 없음</p>
+                    </div>
+                </div>
+                <!-- 중복 수 Top 10 -->
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header" onclick="toggleChart('top10')">
+                        <span class="chart-card-title">중복 기사 수 Top 10 <span class="chart-badge">High</span></span>
+                        <span class="chart-toggle-icon" id="chartTop10Icon">▲</span>
+                    </div>
+                    <div class="chart-card-body" id="chartTop10Body">
+                        <canvas id="chartTop10"></canvas>
+                        <p class="chart-empty" id="chartTop10Empty" style="display:none">데이터 없음</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 분석 진행상황 패널 -->
+        <section class="progress-panel" id="progressPanel" style="display: none;">
+            <div class="progress-header">
+                <span class="progress-phase" id="progressPhase">📡 수집 중...</span>
+                <span class="progress-count" id="progressCount"></span>
+            </div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-current" id="progressTitle"></div>
+            <div class="progress-info">
+                <div class="progress-time">
+                    <span class="progress-time-label">시작</span>
+                    <span class="progress-time-value" id="progressStart">-</span>
+                </div>
+                <div class="progress-time">
+                    <span class="progress-time-label">종료 예상</span>
+                    <span class="progress-time-value" id="progressEnd">계산 중...</span>
+                </div>
+            </div>
+            <div class="progress-info progress-schedule-info">
+                <div class="progress-time">
+                    <span class="progress-time-label">🕐 최근분석 완료</span>
+                    <span class="progress-time-value" id="lastFinished">-</span>
+                </div>
+                <div class="progress-time">
+                    <span class="progress-time-label">📋 기존완료시간</span>
+                    <span class="progress-time-value" id="prevFinished">-</span>
+                </div>
+                <div class="progress-time">
+                    <span class="progress-time-label">⏭️ 다음분석예상</span>
+                    <span class="progress-time-value" id="nextScheduled">-</span>
+                </div>
+            </div>
+            <div class="progress-stats" id="progressStats">
+                <span class="stat stat-saved">💾 저장 <strong id="statSaved">0</strong></span>
+                <span class="stat stat-dup">🔁 중복 <strong id="statDup">0</strong></span>
+                <span class="stat stat-fail">⚠️ 실패 <strong id="statFail">0</strong></span>
+            </div>
+        </section>
+
         <!-- 필터 -->
         <section class="filters">
             <form method="get" action="{% url 'articles:dashboard' %}">
@@ -40,9 +131,10 @@
                         <label for="suitability">적합도</label>
                         <select name="suitability" id="suitability">
                             <option value="">전체</option>
-                            <option value="High" {% if current_filters.suitability == 'High' %}selected{% endif %}>High</option>
-                            <option value="Medium" {% if current_filters.suitability == 'Medium' %}selected{% endif %}>Medium</option>
-                            <option value="Low" {% if current_filters.suitability == 'Low' %}selected{% endif %}>Low</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High+Medium">High+Medium</option>
+                            <option value="Low">Low</option>
                         </select>
                     </div>
                     <div class="filter-group">
@@ -50,7 +142,7 @@
                         <select name="case_category" id="case_category">
                             <option value="">전체</option>
                             {% for cat in categories %}
-                            <option value="{{ cat }}" {% if current_filters.case_category == cat %}selected{% endif %}>{{ cat }}</option>
+                            <option value="{{ cat }}">{{ cat }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -58,25 +150,58 @@
                         <label for="stage">진행 단계</label>
                         <select name="stage" id="stage">
                             <option value="">전체</option>
-                            <option value="피해 발생" {% if current_filters.stage == '피해 발생' %}selected{% endif %}>피해 발생</option>
-                            <option value="관련 절차 진행" {% if current_filters.stage == '관련 절차 진행' %}selected{% endif %}>관련 절차 진행</option>
-                            <option value="소송중" {% if current_filters.stage == '소송중' %}selected{% endif %}>소송중</option>
-                            <option value="판결 선고" {% if current_filters.stage == '판결 선고' %}selected{% endif %}>판결 선고</option>
-                            <option value="종결" {% if current_filters.stage == '종결' %}selected{% endif %}>종결</option>
+                            <option value="피해 발생">피해 발생</option>
+                            <option value="관련 절차 진행">관련 절차 진행</option>
+                            <option value="소송중">소송중</option>
+                            <option value="판결 선고">판결 선고</option>
+                            <option value="종결">종결</option>
                         </select>
                     </div>
                     <div class="filter-group">
+                        <label for="region">국내/해외</label>
+                        <select name="region" id="region">
+                            <option value="">전체</option>
+                            <option value="국내">국내</option>
+                            <option value="해외">해외</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="is_reviewed">심사</label>
+                        <select name="is_reviewed" id="is_reviewed">
+                            <option value="">전체</option>
+                            <option value="false">미심사</option>
+                            <option value="true">심사완료</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="review_passed">통과</label>
+                        <select name="review_passed" id="review_passed">
+                            <option value="">전체</option>
+                            <option value="null">미결정</option>
+                            <option value="true">통과</option>
+                            <option value="false">미통과</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-row filter-row-second">
+                    <div class="filter-group">
+                        <label for="title">제목 검색</label>
+                        <input type="text" name="title" id="title" placeholder="제목 검색...">
+                    </div>
+                    <div class="filter-group">
                         <label for="date_from">시작일</label>
-                        <input type="date" name="date_from" id="date_from" value="{{ current_filters.date_from }}">
+                        <input type="date" name="date_from" id="date_from">
                     </div>
                     <div class="filter-group">
                         <label for="date_to">종료일</label>
-                        <input type="date" name="date_to" id="date_to" value="{{ current_filters.date_to }}">
+                        <input type="date" name="date_to" id="date_to">
                     </div>
                     <div class="filter-actions">
                         <button type="submit" class="btn btn-primary">검색</button>
                         <a href="{% url 'articles:dashboard' %}" class="btn btn-secondary">초기화</a>
-                        <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀 내보내기</a>
+                        <a href="{% url 'articles:export' %}?{{ request.GET.urlencode }}" class="btn btn-export">엑셀
+                            내보내기</a>
+                        <button type="button" class="btn btn-pdf" onclick="openPdfModal()">PDF 만들기</button>
                     </div>
                 </div>
             </form>
@@ -88,21 +213,29 @@
                 <thead>
                     <tr>
                         <th class="col-suitability">적합도</th>
+                        <th class="col-region">지역</th>
                         <th class="col-title">제목</th>
                         <th class="col-category">사건 분야</th>
                         <th class="col-defendant">상대방</th>
                         <th class="col-stage">진행 단계</th>
                         <th class="col-press">언론사</th>
                         <th class="col-date">게재일</th>
+                        <th class="col-reviewed">심사</th>
+                        <th class="col-passed">통과</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for article in articles %}
-                    <tr>
+                    <tr data-id="{{ article.id }}">
                         <td>
-                            <span class="badge badge-{{ article.suitability|lower }}">
+                            <span class="badge badge-{{ article.suitability|lower }} badge-suitability badge-clickable"
+                                data-article-id="{{ article.id }}" data-suitability="{{ article.suitability }}"
+                                onclick="handleSuitabilityClick(this)">
                                 {{ article.suitability }}
                             </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-region-{{ article.region }}">{{ article.region }}</span>
                         </td>
                         <td>
                             <a href="{% url 'articles:detail' article.id %}" class="article-link">
@@ -114,10 +247,30 @@
                         <td>{{ article.stage }}</td>
                         <td>{{ article.press }}</td>
                         <td>{{ article.published_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <div class="review-cell" data-article-id="{{ article.id }}"
+                                data-is-reviewed="{{ article.is_reviewed|yesno:'true,false' }}"
+                                data-review-passed="{{ article.review_passed|yesno:'true,false,null' }}">
+                                <button class="btn-reviewed {% if article.is_reviewed %}active{% endif %}"
+                                    onclick="handleReviewClick(this, 'reviewed')">
+                                    {% if article.is_reviewed %}✓ 심사{% else %}미심사{% endif %}
+                                </button>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="review-cell" data-article-id="{{ article.id }}"
+                                data-is-reviewed="{{ article.is_reviewed|yesno:'true,false' }}"
+                                data-review-passed="{{ article.review_passed|yesno:'true,false,null' }}">
+                                <button class="btn-pass {% if article.review_passed %}active{% endif %}"
+                                    onclick="handleReviewClick(this, 'passed', true)">통과</button>
+                                <button class="btn-fail {% if article.review_passed == False %}active{% endif %}"
+                                    onclick="handleReviewClick(this, 'passed', false)">미통과</button>
+                            </div>
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="empty-message">수집된 기사가 없습니다.</td>
+                        <td colspan="10" class="empty-message">수집된 기사가 없습니다.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -128,32 +281,67 @@
         {% if page_obj.paginator.num_pages > 1 %}
         <nav class="pagination">
             {% if page_obj.has_previous %}
-            <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="page-link">&laquo; 이전</a>
+            <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}"
+                class="page-link">&laquo; 이전</a>
             {% endif %}
 
             {% for num in page_obj.paginator.page_range %}
-                {% if page_obj.number == num %}
-                <span class="page-link page-current">{{ num }}</span>
-                {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
-                <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ num }}" class="page-link">{{ num }}</a>
+            {% if page_obj.number == num %}
+            <span class="page-link page-current">{{ num }}</span>
+            {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %} <a
+                href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ num }}"
+                class="page-link">{{ num }}</a>
                 {% elif num == 1 or num == page_obj.paginator.num_pages %}
-                <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ num }}" class="page-link">{{ num }}</a>
+                <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ num }}"
+                    class="page-link">{{ num }}</a>
                 {% elif num == 2 or num == page_obj.paginator.num_pages|add:"-1" %}
                 <span class="page-dots">...</span>
                 {% endif %}
-            {% endfor %}
+                {% endfor %}
 
-            {% if page_obj.has_next %}
-            <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="page-link">다음 &raquo;</a>
-            {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?{% for key, val in current_filters.items %}{% if val %}{{ key }}={{ val }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}"
+                    class="page-link">다음 &raquo;</a>
+                {% endif %}
         </nav>
         {% endif %}
     </main>
 
     <footer class="footer">
         <div class="container">
-            <p>Legal Radar &copy; 로앤굿</p>
+            <p>Law&amp;Good &copy; 로앤굿</p>
         </div>
     </footer>
+    <!-- PDF 기사 선택 모달 -->
+    <div id="pdfModal" class="pdf-modal-overlay" style="display: none;">
+        <div class="pdf-modal">
+            <div class="pdf-modal-header">
+                <h3 class="pdf-modal-title">PDF 생성 - 기사 선택</h3>
+                <button class="pdf-modal-close" onclick="closePdfModal()">&times;</button>
+            </div>
+            <div class="pdf-modal-controls">
+                <label class="pdf-select-all-label">
+                    <input type="checkbox" id="pdfSelectAll" onchange="selectAllPdf(this.checked)">
+                    전체 선택/해제
+                </label>
+                <span id="pdfModalCount" class="pdf-modal-count"></span>
+            </div>
+            <div class="pdf-modal-loading" id="pdfModalLoading">기사를 불러오는 중...</div>
+            <ul class="pdf-article-list" id="pdfArticleList" style="display: none;"></ul>
+            <div class="pdf-modal-footer">
+                <p class="pdf-modal-hint">선택 없이 생성하면 차트 + 전체 목록만 출력됩니다.</p>
+                <div class="pdf-modal-actions">
+                    <button class="btn btn-secondary" onclick="closePdfModal()">취소</button>
+                    <button class="btn btn-primary" onclick="generatePdf()">PDF 생성</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF 출력 영역 (화면에는 숨김, 인쇄 시에만 표시) -->
+    <div id="printArea"></div>
+
+    <script src="{% static 'js/main.js' %}"></script>
 </body>
+
 </html>

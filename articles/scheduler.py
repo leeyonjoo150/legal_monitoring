@@ -2,10 +2,9 @@ from datetime import datetime, timedelta
 
 from django.db import IntegrityError
 from django.utils import timezone
-from plyer import notification
 
 from articles.collectors.naver import collect_all_news
-from articles.analyzers.gemini import analyze_with_retry
+from articles.analyzers.gemini import analyze_with_retry, DailyLimitExceeded
 from articles.models import Article, SkippedURL
 from articles.progress import (
     start_collection, start_analysis, update_progress, update_result, finish,
@@ -53,12 +52,6 @@ def collect_and_analyze():
     print(f"[스케줄러] 수집 시작: {timezone.now()}")
     print(f"{'='*50}")
 
-    notification.notify(
-        title='Law&Good',
-        message='기사 수집을 시작합니다.',
-        timeout=5,
-    )
-
     # 진행상황: 수집 시작
     start_collection()
 
@@ -86,11 +79,10 @@ def collect_and_analyze():
         # 진행상황: 분석 시작
         start_analysis(total=len(new_articles))
 
-        # 3. 최근 30일 기사 목록 (중복 사건 판단용)
-        thirty_days_ago = timezone.now() - timedelta(days=30)
+        # 3. 최근 기사 목록 (중복 사건 판단용, 최근 500건 상한)
         existing_articles = list(
-            Article.objects.filter(collected_at__gte=thirty_days_ago)
-            .values('id', 'title', 'defendant', 'case_category')
+            Article.objects.order_by('-id')
+            .values('id', 'title', 'defendant', 'case_category')[:500]
         )
 
         # 4. Gemini 분석 + 저장
@@ -102,7 +94,11 @@ def collect_and_analyze():
             # 진행상황 업데이트
             update_progress(current=idx, title=article['title'][:60])
 
-            result = analyze_with_retry(article, existing_articles)
+            try:
+                result = analyze_with_retry(article, existing_articles)
+            except DailyLimitExceeded as e:
+                print(f"[일별 한도 소진] 수집 중단: {e}")
+                break
 
             if result is None:
                 failed_count += 1
@@ -172,11 +168,6 @@ def collect_and_analyze():
             })
 
         print(f"\n[완료] 저장: {saved_count}건 / 중복 사건: {skipped_duplicate}건 / 분석 실패: {failed_count}건")
-        notification.notify(
-            title='Law&Good',
-            message=f'기사 수집 완료 — 저장 {saved_count}건 / 중복 {skipped_duplicate}건 / 실패 {failed_count}건',
-            timeout=15,
-        )
     finally:
         # 항상 완료 상태로 전환
         finish()

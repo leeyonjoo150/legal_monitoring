@@ -290,11 +290,46 @@ def update_suitability(request, article_id):
         openapi.Parameter('after_id', openapi.IN_QUERY, type=openapi.TYPE_INTEGER,
                           description='이 ID 이후의 기사만 반환', default=0),
         openapi.Parameter('suitability', openapi.IN_QUERY, type=openapi.TYPE_STRING,
-                          description='적합도 필터 (High/Medium/Low)', required=False),
+                          description='적합도 필터 (High/Medium/Low/High+Medium)', required=False),
         openapi.Parameter('case_category', openapi.IN_QUERY, type=openapi.TYPE_STRING,
                           description='사건 분야 필터', required=False),
+        openapi.Parameter('stage', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='진행 단계 필터', required=False),
+        openapi.Parameter('region', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='국내/해외 필터', required=False),
+        openapi.Parameter('title', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='제목 검색 (부분 일치)', required=False),
+        openapi.Parameter('date_from', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='게재일 시작 (YYYY-MM-DD)', required=False),
+        openapi.Parameter('date_to', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='게재일 종료 (YYYY-MM-DD)', required=False),
+        openapi.Parameter('is_reviewed', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='심사 여부 필터 (true/false)', required=False),
+        openapi.Parameter('review_passed', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='통과 여부 필터 (true/false/null)', required=False),
     ],
-    responses={200: openapi.Response('기사 목록 + 통계')},
+    responses={200: openapi.Response('기사 목록 + 통계', schema=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'articles': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'suitability': openapi.Schema(type=openapi.TYPE_STRING),
+                    'region': openapi.Schema(type=openapi.TYPE_STRING),
+                    'title': openapi.Schema(type=openapi.TYPE_STRING),
+                    'case_category': openapi.Schema(type=openapi.TYPE_STRING),
+                    'defendant': openapi.Schema(type=openapi.TYPE_STRING),
+                    'stage': openapi.Schema(type=openapi.TYPE_STRING),
+                    'press': openapi.Schema(type=openapi.TYPE_STRING),
+                    'published_at': openapi.Schema(type=openapi.TYPE_STRING),
+                },
+            )),
+            'total_today': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'high_today': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'medium_today': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+    ))},
 )
 @api_view(['GET'])
 def api_articles_latest(request):
@@ -330,6 +365,36 @@ def api_articles_latest(request):
     })
 
 
+@swagger_auto_schema(
+    method='get',
+    operation_summary='차트 데이터 조회',
+    operation_description='진행 단계별 High 기사 수, 심사 현황, 중복 Top 10을 반환합니다.',
+    manual_parameters=[
+        openapi.Parameter('days', openapi.IN_QUERY, type=openapi.TYPE_INTEGER,
+                          description='조회 기간 (일 수, 기본값 30, 최대 365)', required=False, default=30),
+    ],
+    responses={200: openapi.Response('차트 데이터', schema=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'stage_high': openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                'labels': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING)),
+                'counts': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER)),
+            }),
+            'review_status': openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                'reviewed': openapi.Schema(type=openapi.TYPE_INTEGER),
+                'unreviewed': openapi.Schema(type=openapi.TYPE_INTEGER),
+            }),
+            'top10_duplicates': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'title': openapi.Schema(type=openapi.TYPE_STRING),
+                    'count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                },
+            )),
+        },
+    ))},
+)
 @api_view(['GET'])
 def api_charts(request):
     """차트 데이터 API."""
@@ -390,6 +455,31 @@ def api_charts(request):
     })
 
 
+@swagger_auto_schema(
+    method='post',
+    operation_summary='메모 추가',
+    operation_description='기사에 메모를 추가합니다.',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['author', 'content'],
+        properties={
+            'author': openapi.Schema(type=openapi.TYPE_STRING, description='작성자'),
+            'content': openapi.Schema(type=openapi.TYPE_STRING, description='메모 내용'),
+        },
+    ),
+    responses={
+        200: openapi.Response('추가된 메모', schema=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                'author': openapi.Schema(type=openapi.TYPE_STRING),
+                'content': openapi.Schema(type=openapi.TYPE_STRING),
+                'created_at': openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        )),
+        400: '작성자 또는 내용 누락',
+    },
+)
 @api_view(['POST'])
 def add_memo(request, article_id):
     """메모 추가 API."""
@@ -416,6 +506,31 @@ def add_memo(request, article_id):
     })
 
 
+@swagger_auto_schema(
+    method='get',
+    operation_summary='PDF용 기사 목록 조회',
+    operation_description='PDF 내보내기 팝업용 기사 목록을 반환합니다. 현재 필터 조건과 max_id 스냅샷이 적용됩니다.',
+    manual_parameters=[
+        openapi.Parameter('max_id', openapi.IN_QUERY, type=openapi.TYPE_INTEGER,
+                          description='이 ID 이하의 기사만 반환 (스냅샷 기준)', required=False),
+        openapi.Parameter('suitability', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('case_category', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('stage', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('region', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('title', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('date_from', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('date_to', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('is_reviewed', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+        openapi.Parameter('review_passed', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False),
+    ],
+    responses={200: openapi.Response('기사 목록', schema=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'articles': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
+            'total': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+    ))},
+)
 @api_view(['GET'])
 def api_pdf_articles(request):
     """PDF 팝업용 기사 목록 (필터 + max_id 스냅샷 적용)."""
@@ -443,6 +558,43 @@ def api_pdf_articles(request):
     })
 
 
+@swagger_auto_schema(
+    method='get',
+    operation_summary='PDF용 기사 상세 조회',
+    operation_description='PDF 내보내기용 선택 기사의 전체 필드와 메모를 반환합니다.',
+    manual_parameters=[
+        openapi.Parameter('ids', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                          description='쉼표로 구분된 기사 ID 목록 (예: 1,2,3)', required=True),
+    ],
+    responses={
+        200: openapi.Response('기사 상세 목록', schema=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'articles': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'title': openapi.Schema(type=openapi.TYPE_STRING),
+                        'press': openapi.Schema(type=openapi.TYPE_STRING),
+                        'published_at': openapi.Schema(type=openapi.TYPE_STRING),
+                        'ai_suitability': openapi.Schema(type=openapi.TYPE_STRING),
+                        'suitability': openapi.Schema(type=openapi.TYPE_STRING),
+                        'suitability_reason': openapi.Schema(type=openapi.TYPE_STRING),
+                        'case_category': openapi.Schema(type=openapi.TYPE_STRING),
+                        'defendant': openapi.Schema(type=openapi.TYPE_STRING),
+                        'damage_scale': openapi.Schema(type=openapi.TYPE_STRING),
+                        'stage': openapi.Schema(type=openapi.TYPE_STRING),
+                        'stage_detail': openapi.Schema(type=openapi.TYPE_STRING),
+                        'summary': openapi.Schema(type=openapi.TYPE_STRING),
+                        'region': openapi.Schema(type=openapi.TYPE_STRING),
+                        'memos': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
+                    },
+                )),
+            },
+        )),
+        400: 'ids 파라미터 누락 또는 형식 오류',
+    },
+)
 @api_view(['GET'])
 def api_pdf_article_details(request):
     """PDF용 선택 기사 상세 데이터 (전체 필드 + 메모)."""

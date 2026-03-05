@@ -133,9 +133,21 @@ async function fetchAndUpdateSummaryCards() {
         }
     });
 
+    // === 브라우저 알림 ===
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+
+    function sendBrowserNotification(title, body) {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        new Notification(title, { body: body });
+    }
+
     // === 실시간 진행상황 폴링 ===
     const POLL_INTERVAL = 3000; // 3초
     let wasRunning = false;
+    let isFirstPoll = true;
+    const LAST_STARTED_KEY = 'lg_last_started_at';
 
     const panel = document.getElementById('progressPanel');
     if (!panel) return;
@@ -337,7 +349,33 @@ async function fetchAndUpdateSummaryCards() {
             var res = await fetch('/api/progress/');
             if (res.ok) {
                 var data = await res.json();
+                var prevRunning = wasRunning;
                 updateUI(data);
+
+                if (isFirstPoll) {
+                    // 첫 폴링: 새로고침인지 새 수집인지 구분
+                    if (data.is_running && data.started_at) {
+                        var savedStartedAt = localStorage.getItem(LAST_STARTED_KEY);
+                        if (savedStartedAt !== data.started_at) {
+                            // started_at이 다르면 새 수집 → 알림
+                            sendBrowserNotification('Law&Good', '기사 수집을 시작합니다.');
+                            localStorage.setItem(LAST_STARTED_KEY, data.started_at);
+                        }
+                    }
+                    isFirstPoll = false;
+                } else {
+                    // 이후 폴링: 상태 변화 감지
+                    if (!prevRunning && data.is_running) {
+                        // 수집 시작 알림
+                        sendBrowserNotification('Law&Good', '기사 수집을 시작합니다.');
+                        if (data.started_at) localStorage.setItem(LAST_STARTED_KEY, data.started_at);
+                    }
+                    if (prevRunning && data.phase === 'done') {
+                        // 수집 완료 알림
+                        sendBrowserNotification('Law&Good',
+                            '수집 완료 — 저장 ' + (data.saved || 0) + '건 / 중복 ' + (data.skipped_duplicate || 0) + '건 / 실패 ' + (data.failed || 0) + '건');
+                    }
+                }
 
                 // 수집 중일 때만 기사 목록 + 요약 카드 업데이트
                 if (data.is_running) {

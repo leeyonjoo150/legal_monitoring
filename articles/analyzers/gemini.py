@@ -9,6 +9,11 @@ CALL_INTERVAL = 4  # 초 (Tier 1 분당 한도 내 유지)
 DAILY_LIMIT = 1400  # 경고 임계값
 _daily_call_count = 0
 
+
+class DailyLimitExceeded(Exception):
+    """일별 API 요청 한도 소진 시 발생."""
+    pass
+
 SYSTEM_PROMPT = """당신은 소송금융 투자를 검토하는 심사역입니다.
 원칙적인 법률 전문가의 면과 공격적으로 수임 기회를 포착하는 비즈니스 전략가의 면을 모두 갖추고 있습니다.
 
@@ -37,6 +42,8 @@ SYSTEM_PROMPT = """당신은 소송금융 투자를 검토하는 심사역입니
 ### 부적합 조건
 1. 이미 종결된 사건 (합의 완료, 판결 확정 등) → stage가 "종결"이면 suitability는 반드시 "Low"
 2. 소송·분쟁 무관 기사: 단순 기업의 인수합병(M&A), 실적 발표, 신제품 출시, 단순 주가 등락(특징주) 소식 등 누군가의 '위법 행위'나 '피해 발생'과 무관한 일반 경제/주식 뉴스는 무조건 suitability를 "Low"로 설정하라. 소송이나 분쟁의 여지가 없는 뉴스 기사는 절대 High나 Medium을 주어서는 안 된다.
+3. 트렌드·동향·분석 기사: 피해자와 피고가 특정되지 않고, 업계 전반의 법적 논쟁이나 사회적 이슈의 흐름을 설명·전망하는 기사는 suitability를 "High"로 설정하지 말고, 최대 "Medium"으로 설정하라.
+   예: "AI 저작권의 미래", "가상자산 규제의 방향", "공정거래법 강화 논의"
 
 ### 판정 기준
 suitability 값은 반드시 "High", "Medium", "Low" 중 하나만 사용하라. 다른 값은 절대 사용하지 마라.
@@ -191,19 +198,48 @@ def analyze_article(article: dict, existing_articles: list[dict]) -> dict | None
     return _parse_response(response.text)
 
 
+def _extract_retry_delay(error: Exception) -> int | None:
+    """429 오류에서 retryDelay(초)를 추출. 없으면 None 반환.
+    일별 한도 소진(retryDelay > 1시간)이면 DailyLimitExceeded 발생."""
+    import re
+    text = str(error)
+    if '429' not in text:
+        return None
+    match = re.search(r'retryDelay["\s:]+(\d+)', text)
+    if match:
+        delay = int(match.group(1))
+        if delay > 3600:  # 1시간 초과 = 일별 한도 소진
+            raise DailyLimitExceeded(f"일별 요청 한도 소진 — {delay // 3600}시간 후 초기화됩니다.")
+        return delay + 5  # 여유 5초 추가
+    return 65  # 기본 대기 시간
+
+
 def analyze_with_retry(article: dict, existing_articles: list[dict], max_retry: int = 3) -> dict | None:
-    """재시도 로직 포함 분석."""
-    for attempt in range(max_retry):
+    """재시도 로직 포함 분석. 429는 재시도 횟수에서 제외하고 별도 처리."""
+    attempt = 0
+    wait_429 = 0
+    max_wait_429 = 3
+
+    while attempt < max_retry:
         try:
             result = analyze_article(article, existing_articles)
             if result is not None:
                 return _sanitize_result(result, article)
             print(f"[분석 재시도] JSON 파싱 실패 ({attempt + 1}/{max_retry}): {article['title'][:50]}")
+            attempt += 1
+            if attempt < max_retry:
+                time.sleep(2)
         except Exception as e:
-            print(f"[분석 오류] ({attempt + 1}/{max_retry}): {e}")
-
-        if attempt < max_retry - 1:
-            time.sleep(2)
+            retry_delay = _extract_retry_delay(e)
+            if retry_delay and wait_429 < max_wait_429:
+                wait_429 += 1
+                print(f"[429 한도 초과] {retry_delay}초 대기 후 재시도 ({wait_429}/{max_wait_429}): {article['title'][:50]}")
+                time.sleep(retry_delay)
+            else:
+                attempt += 1
+                print(f"[분석 오류] ({attempt}/{max_retry}): {e}")
+                if attempt < max_retry:
+                    time.sleep(2)
 
     print(f"[분석 실패] 건너뜀: {article['url']}")
     return None

@@ -371,9 +371,10 @@ async function fetchAndUpdateSummaryCards() {
                         if (data.started_at) localStorage.setItem(LAST_STARTED_KEY, data.started_at);
                     }
                     if (prevRunning && data.phase === 'done') {
-                        // 수집 완료 알림
+                        // 수집 완료 알림 (한 번만)
                         sendBrowserNotification('Law&Good',
                             '수집 완료 — 저장 ' + (data.saved || 0) + '건 / 중복 ' + (data.skipped_duplicate || 0) + '건 / 실패 ' + (data.failed || 0) + '건');
+                        wasRunning = false;
                     }
                 }
 
